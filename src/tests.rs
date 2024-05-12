@@ -1,6 +1,6 @@
-use crate::draw::{self, Canvas};
+use crate::draw;
 use crate::math::color::Color;
-use crate::math::linalg::{cross, dot, Tuple};
+use crate::math::linalg::{cross, dot, iden4, mat4, Matrix, MatrixMethods, Tuple};
 use crate::{color, point, tuple, vector};
 
 #[test]
@@ -99,18 +99,68 @@ fn color_operations() {
 #[test]
 fn canvas_operations() {
     // creating a canvas
-    let c = draw::Canvas::new(10, 20);
+    let c = draw::Canvas::blank(10, 20);
     assert_eq!(c.width, 10);
     assert_eq!(c.height, 20);
-    for row in c.grid {
-        for el in row {
-            assert_eq!(el, Color::black());
+    for i in 0..c.height {
+        for j in 0..c.width {
+            assert_eq!(c[[i, j]], Color::black());
         }
     }
 
     // writing pixels to a canvas
-    let mut c = draw::Canvas::new(10, 20);
+    let mut c = draw::Canvas::blank(10, 20);
     let red = color![1.0, 0.0, 0.0];
     c.write(2, 3, red);
     assert_eq!(c.at(2, 3).clone(), color![1.0, 0.0, 0.0]);
+}
+
+#[test]
+fn matrix_operations() {
+    // comparing matrices
+    let a = mat4(&[
+        1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0,
+    ]);
+    let b = mat4(&[
+        1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0,
+    ]);
+    assert_eq!(a, b);
+
+    let a = mat4(&[
+        1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0,
+    ]);
+    let b = mat4(&[
+        1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 8.0, 0.0, 6.0, 5.0, 4.0, 3.0, 2.0,
+    ]);
+    assert_ne!(a, b);
+
+    // matrix multiplication
+    let a = mat4(&[
+        1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0,
+    ]);
+    let b = mat4(&[
+        -2.0, 1.0, 2.0, 3.0, 3.0, 2.0, 1.0, -1.0, 4.0, 3.0, 6.0, 5.0, 1.0, 2.0, 7.0, 8.0,
+    ]);
+    let ab = mat4(&[
+        20.0, 22.0, 50.0, 48.0, 44.0, 54.0, 114.0, 108.0, 40.0, 58.0, 110.0, 102.0, 16.0, 26.0,
+        46.0, 42.0,
+    ]);
+    assert_eq!(a * b, ab);
+
+    // matrix-tuple multiplication
+    let a = mat4(&[
+        1.0, 2.0, 3.0, 4.0, 2.0, 4.0, 4.0, 2.0, 8.0, 6.0, 4.0, 1.0, 0.0, 0.0, 0.0, 1.0,
+    ]);
+    let b = tuple![1.0, 2.0, 3.0, 1.0];
+    assert_eq!(a * b, tuple![18.0, 24.0, 33.0, 1.0]);
+
+    // identity matrix
+    let I = iden4();
+    let a = mat4(&[
+        1.0, 2.0, 3.0, 4.0, 2.0, 4.0, 4.0, 2.0, 8.0, 6.0, 4.0, 1.0, 0.0, 0.0, 0.0, 1.0,
+    ]);
+    assert_eq!(
+        a * I,
+        mat4(&[1.0, 2.0, 3.0, 4.0, 2.0, 4.0, 4.0, 2.0, 8.0, 6.0, 4.0, 1.0, 0.0, 0.0, 0.0, 1.0,])
+    );
 }

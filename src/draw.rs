@@ -2,34 +2,18 @@ use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 
-use super::math::color::Color;
+use crate::math::linalg::MatrixMethods;
 
-/// Structure that implements Canvas where objects are drawn
-#[derive(Debug)]
-pub struct Canvas {
-    pub width: usize,
-    pub height: usize,
-    pub grid: Vec<Vec<Color>>,
-}
+use super::math::color::Color;
+use super::math::linalg::Matrix;
+
+/// Structure that implements Canvas where objects are drawn (which is just a matrix with special methods)
+pub type Canvas = Matrix<Color>;
 
 impl Canvas {
-    /// create a new black canvas
-    pub fn new(width: usize, height: usize) -> Canvas {
-        Canvas {
-            width: width,
-            height: height,
-            grid: vec![vec![Color::black(); width]; height],
-        }
-    }
-
-    /// writes color to a pixel in a given location
-    pub fn write(&mut self, col: usize, row: usize, color: Color) {
-        self.grid[row][col] = color;
-    }
-
-    /// return a color of a pixel in a given location
-    pub fn at(&self, col: usize, row: usize) -> &Color {
-        &self.grid[row][col]
+    /// returns a blank canvas
+    pub fn blank(width: usize, height: usize) -> Canvas {
+        Canvas::new_with_value(width, height, Color::black())
     }
 
     pub fn to_ppm(&self, dir: &str, filename: &str) {
@@ -39,10 +23,10 @@ impl Canvas {
 
         // write pixels to ppm
         let mut buf = String::new();
-        for row in &self.grid {
+        for i in 0..self.height {
             buf.clear();
-            for pixel in row {
-                buf.push_str(pixel.fmt().as_str());
+            for j in 0..self.width {
+                buf.push_str(self.grid[i * self.width + j].fmt().as_str());
                 buf.push(' ');
             }
             ppm.push_str(buf.trim());
@@ -54,7 +38,6 @@ impl Canvas {
         self.ppm_to_file(dir, filename, ppm.as_bytes());
     }
 
-    #[allow(dead_code)]
     fn ppm_to_file(&self, dir: &str, filename: &str, buf: &[u8]) {
         // open file to read
         let path = match PathBuf::from(dir).join(filename).to_str() {

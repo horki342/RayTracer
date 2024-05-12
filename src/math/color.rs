@@ -1,21 +1,27 @@
 use std::ops;
 
 /// structure to hold Colors
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct Color {
     pub red: f32,
     pub green: f32,
     pub blue: f32,
 }
 
-impl Color {
-    /// returns black color
-    pub fn black() -> Color {
-        Color {
+impl Default for Color {
+    fn default() -> Self {
+        Self {
             red: 0.0,
             green: 0.0,
-            blue: 1.0,
+            blue: 0.0,
         }
+    }
+}
+
+impl Color {
+    // implement default colors
+    pub fn black() -> Self {
+        Color::default()
     }
 
     /// converts val from 0..1 to 0..255 (for colors)
