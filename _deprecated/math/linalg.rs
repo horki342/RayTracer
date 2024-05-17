@@ -36,6 +36,20 @@ pub trait MatrixMethods<T: Copy + Default + Clone> {
 
     /// write lots of valuesin the format [..row1 ..row2 ..row3 ..etc]
     fn fill(&mut self, args: &[T]);
+
+    fn transpose(&self) -> Self;
+
+    /// Returns a submatrix by removing the specified row and column
+    fn submatrix(&self, r: usize, c: usize) -> Self;
+
+    /// Returns the determinant of the matrix
+    fn det(&self) -> T;
+
+    /// Returns the minor of the matrix at the specified row and column
+    fn minor(&self, r: usize, c: usize) -> T;
+
+    /// Returns the cofactor of the matrix at the specified row and column
+    fn cofactor(&self, r: usize, c: usize) -> T;
 }
 
 // returns a default 4 by 4 matrix (zero in case of f32 and i32)
@@ -71,7 +85,10 @@ pub fn mat4(args: &[f32]) -> Matrix<f32> {
     res
 }
 
-impl<T: Clone + Default + Copy> MatrixMethods<T> for Matrix<T> {
+impl<T> MatrixMethods<T> for Matrix<T>
+where
+    T: Clone + Default + Copy + ops::Add<Output = T> + ops::Mul<Output = T> + ops::Sub<Output = T>,
+{
     fn new(width: usize, height: usize) -> Matrix<T> {
         Matrix {
             width: width,
@@ -113,6 +130,76 @@ impl<T: Clone + Default + Copy> MatrixMethods<T> for Matrix<T> {
             for j in 0..self.width {
                 self.write(j, i, args[self.width * i + j]);
             }
+        }
+    }
+
+    fn transpose(&self) -> Self {
+        let mut transposed = Matrix::new(self.height, self.width);
+        for i in 0..self.width {
+            for j in 0..self.height {
+                transposed.write(i, j, self.at(j, i).clone());
+            }
+        }
+
+        transposed
+    }
+
+    fn submatrix(&self, r: usize, c: usize) -> Self {
+        // Check whether r and c are within boundaries
+        if !(0..self.height).contains(&r) || !(0..self.width).contains(&c) {
+            panic!("cannot delete a row/col from matrix");
+        }
+
+        let mut submatrix = Matrix::new(self.width - 1, self.height - 1);
+        let mut sub_i = 0;
+
+        for i in 0..self.height {
+            if i == r {
+                continue;
+            }
+
+            let mut sub_j = 0;
+            for j in 0..self.width {
+                if j == c {
+                    continue;
+                }
+
+                submatrix.write(sub_j, sub_i, self[[i, j]].clone());
+                sub_j += 1;
+            }
+            sub_i += 1;
+        }
+
+        submatrix
+    }
+
+    fn det(&self) -> T {
+        if self.width != self.height {
+            panic!("determinant is only defined for square matrices");
+        }
+
+        if self.width == 2 {
+            // Base case for 2x2 matrix
+            return self[[0, 0]] * self[[1, 1]] - self[[0, 1]] * self[[1, 0]];
+        }
+
+        let mut det = T::default();
+        for c in 0..self.width {
+            det = det + self[[0, c]] * self.cofactor(0, c);
+        }
+        det
+    }
+
+    fn minor(&self, r: usize, c: usize) -> T {
+        self.submatrix(r, c).det()
+    }
+
+    fn cofactor(&self, r: usize, c: usize) -> T {
+        let minor = self.minor(r, c);
+        if (r + c) % 2 == 0 {
+            return minor;
+        } else {
+            return T::default() - minor;
         }
     }
 }
@@ -159,7 +246,7 @@ impl<T: PartialEq> PartialEq for Matrix<T> {
 /// matrix-matrix multiplication
 impl<T> ops::Mul<Matrix<T>> for Matrix<T>
 where
-    T: Default + Copy + Clone + ops::Add<Output = T> + ops::Mul<Output = T>,
+    T: Default + Copy + Clone + ops::Add<Output = T> + ops::Mul<Output = T> + ops::Sub<Output = T>,
 {
     type Output = Matrix<T>;
 
