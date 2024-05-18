@@ -1,13 +1,14 @@
-use ray_tracer::math::*;
+use ray_tracer::draw::{shapes, Scene};
+use ray_tracer::math::{color, point, tuple, vector};
+
+mod projs;
 
 fn main() {
-    let transform = Transformations::translate(5.0, -3.0, 2.0);
-    let p = point(-3.0, 4.0, 5.0);
-    let res = point(2.0, 1.0, 7.0);
+    let col = color(0.5, 0.5, 0.5);
 
-    println!("{}", transform);
-    println!("{}", transform * p);
-    println!("{}", res);
+    let r = shapes::Ray::new(point(0.0, 0.0, -5.0), vector(0.0, 0.0, 1.0), col);
+    let s = shapes::Sphere::new(0.0, 0.0, 0.0, 1.0, col);
+    let xs = r.intersect_sphere(&s);
 
-    println!("{}", veq(&(transform * p), &res));
+    println!("{:?}", xs);
 }

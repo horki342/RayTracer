@@ -3,5 +3,5 @@
 #[cfg(test)]
 mod tests;
 
-mod draw;
+pub mod draw;
 pub mod math;

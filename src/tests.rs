@@ -1,5 +1,13 @@
-use crate::draw::Canvas as cv;
+use std::f64::consts::PI;
+
+use crate::draw;
+use crate::draw::shapes::Sphere;
+use crate::draw::Canvas;
+use crate::math::Transformation::*;
 use crate::math::*;
+use crate::transform;
+use draw::shapes::Material;
+use draw::shapes::Ray;
 
 #[test]
 fn tuple_operations() {
@@ -75,7 +83,7 @@ fn color_operations() {
 #[test]
 fn canvas_operations() {
     // creating a canvas
-    let c = cv::new(10, 20);
+    let c = Canvas::new(10, 20);
     assert_eq!(c.width, 10);
     assert_eq!(c.height, 20);
     for i in 0..c.height {
@@ -85,7 +93,7 @@ fn canvas_operations() {
     }
 
     // writing pixels to a canvas
-    let mut c = cv::new(10, 20);
+    let mut c = Canvas::new(10, 20);
     let red = color(1.0, 0.0, 0.0);
     let _ = c.write(2, 3, red);
     assert_eq!(c[[2, 3]], color(1.0, 0.0, 0.0));
@@ -161,16 +169,144 @@ fn matrix_operations() {
 #[test]
 fn transformations() {
     // translation
-    let transform = Transformations::translate(5.0, -3.0, 2.0);
+    let transform = Transformation::Translate(5.0, -3.0, 2.0).get_matrix();
     let p = point(-3.0, 4.0, 5.0);
     assert!(veq(&(transform * p), &point(2.0, 1.0, 7.0)));
 
-    let transform = Transformations::translate(5.0, -3.0, 2.0);
+    let transform = Transformation::Translate(5.0, -3.0, 2.0).get_matrix();
     let inv = transform.try_inverse().unwrap();
     let p = point(-3.0, 4.0, 5.0);
     assert!(veq(&(inv * p), &point(-8.0, 7.0, 3.0)));
 
-    let transform = Transformations::translate(5.0, -3.0, 2.0);
+    let transform = Transformation::Translate(5.0, -3.0, 2.0).get_matrix();
     let v = vector(-3.0, 4.0, 5.0);
     assert!(veq(&(transform * v), &v));
+
+    // scaling
+    let scale = Transformation::Scale(2.0, 3.0, 4.0).get_matrix();
+    let p = point(-4.0, 6.0, 8.0);
+    assert!(veq(&(scale * p), &point(-8.0, 18.0, 32.0)));
+
+    let scale = Transformation::Scale(2.0, 3.0, 4.0).get_matrix();
+    let p = vector(-4.0, 6.0, 8.0);
+    assert!(veq(&(scale * p), &vector(-8.0, 18.0, 32.0)));
+
+    let transform = Transformation::Scale(2.0, 3.0, 4.0).get_matrix();
+    let inv = transform.try_inverse().unwrap();
+    let v = vector(-4.0, 6.0, 8.0);
+    let res = inv * v;
+    assert!(veq(&res, &vector(-2.0, 2.0, 2.0)));
+
+    let transform = Transformation::Scale(-1.0, 1.0, 1.0).get_matrix();
+    let p = point(2.0, 3.0, 4.0);
+    let res = transform * p;
+    assert!(veq(&res, &point(-2.0, 3.0, 4.0)));
+
+    // rotating
+    let p = point(0.0, 1.0, 0.0);
+    let half_quarter = Transformation::RotateX(PI / 4.0).get_matrix();
+    let full_quarter = Transformation::RotateX(PI / 2.0).get_matrix();
+    let res1 = half_quarter * p;
+    let res2 = full_quarter * p;
+    assert!(veq(
+        &res1,
+        &point(0.0, 2.0_f64.sqrt() / 2.0, 2.0_f64.sqrt() / 2.0)
+    ));
+    assert!(veq(&res2, &point(0.0, 0.0, 1.0)));
+
+    let inv = half_quarter.try_inverse().unwrap();
+    assert!(veq(
+        &(inv * p),
+        &point(0.0, 2.0_f64.sqrt() / 2.0, -2.0_f64.sqrt() / 2.0)
+    ));
+
+    let p = point(0.0, 0.0, 1.0);
+    let half_quarter = Transformation::RotateY(PI / 4.0).get_matrix();
+    let full_quarter = Transformation::RotateY(PI / 2.0).get_matrix();
+    assert!(veq(
+        &(half_quarter * p),
+        &point(2.0_f64.sqrt() / 2.0, 0.0, 2.0_f64.sqrt() / 2.0)
+    ));
+    assert!(veq(&(full_quarter * p), &point(1.0, 0.0, 0.0)));
+
+    let p = point(0.0, 1.0, 0.0);
+    let half_quarter = Transformation::RotateZ(PI / 4.0).get_matrix();
+    let full_quarter = Transformation::RotateZ(PI / 2.0).get_matrix();
+    assert!(veq(
+        &(half_quarter * p),
+        &point(-2.0_f64.sqrt() / 2.0, 2.0_f64.sqrt() / 2.0, 0.0)
+    ));
+    assert!(veq(&(full_quarter * p), &point(-1.0, 0.0, 0.0)));
+
+    // shearing
+    let transform = Transformation::Shear(1.0, 0.0, 0.0, 0.0, 0.0, 0.0).get_matrix();
+    let p = point(2.0, 3.0, 4.0);
+    assert!(veq(&(transform * p), &point(5.0, 3.0, 4.0)));
+
+    let transform = Transformation::Shear(0.0, 1.0, 0.0, 0.0, 0.0, 0.0).get_matrix();
+    let p = point(2.0, 3.0, 4.0);
+    assert!(veq(&(transform * p), &point(6.0, 3.0, 4.0)));
+
+    let transform = Transformation::Shear(0.0, 0.0, 1.0, 0.0, 0.0, 0.0).get_matrix();
+    let p = point(2.0, 3.0, 4.0);
+    assert!(veq(&(transform * p), &point(2.0, 5.0, 4.0)));
+
+    let transform = Transformation::Shear(0.0, 0.0, 0.0, 1.0, 0.0, 0.0).get_matrix();
+    let p = point(2.0, 3.0, 4.0);
+    assert!(veq(&(transform * p), &point(2.0, 7.0, 4.0)));
+
+    let transform = Transformation::Shear(0.0, 0.0, 0.0, 0.0, 1.0, 0.0).get_matrix();
+    let p = point(2.0, 3.0, 4.0);
+    assert!(veq(&(transform * p), &point(2.0, 3.0, 6.0)));
+
+    let transform = Transformation::Shear(0.0, 0.0, 0.0, 0.0, 0.0, 1.0).get_matrix();
+    let p = point(2.0, 3.0, 4.0);
+    assert!(veq(&(transform * p), &point(2.0, 3.0, 7.0)));
+
+    // chained transformation
+    let pipeline = transform!(
+        RotateX(PI / 2.0),
+        Scale(5.0, 5.0, 5.0),
+        Translate(10.0, 5.0, 7.0)
+    )
+    .get_matrix();
+    let p = point(1.0, 0.0, 1.0);
+    assert!(veq(&(pipeline * p), &point(15.0, 0.0, 7.0)));
+}
+
+#[test]
+fn intersections() {
+    let col = color(0.5, 0.5, 0.5);
+
+    // ray operations
+    let r = Ray::new(point(2.0, 3.0, 4.0), vector(1.0, 0.0, 0.0), col);
+    assert!(veq(&(r.pos(0.0)), &point(2.0, 3.0, 4.0)));
+    assert!(veq(&(r.pos(1.0)), &point(3.0, 3.0, 4.0)));
+    assert!(veq(&(r.pos(-1.0)), &point(1.0, 3.0, 4.0)));
+    assert!(veq(&(r.pos(2.5)), &point(4.5, 3.0, 4.0)));
+
+    // sphere-ray interactions
+    let r = Ray::new(point(0.0, 0.0, -5.0), vector(0.0, 0.0, 1.0), col);
+    let s = Sphere::new(0.0, 0.0, 0.0, 1.0, col);
+    let xs = r.intersect_sphere(&s);
+
+    assert_eq!(xs.len(), 2);
+    assert!(xs.contains(&4.0));
+    assert!(xs.contains(&6.0));
+
+    let r = Ray::new(point(0.0, 1.0, -5.0), vector(0.0, 0.0, 1.0), col);
+    let xs = r.intersect_sphere(&s);
+    assert_eq!(xs.len(), 2);
+    assert!(xs.contains(&5.0));
+    assert!(xs.contains(&5.0));
+
+    let r = Ray::new(point(0.0, 2.0, -5.0), vector(0.0, 0.0, 1.0), col);
+    let xs = r.intersect_sphere(&s);
+    assert_eq!(xs.len(), 0);
+
+    let r = Ray::new(point(0.0, 0.0, 0.0), vector(0.0, 0.0, 1.0), col);
+    let xs = r.intersect_sphere(&s);
+    assert_eq!(xs.len(), 2);
+    assert!(xs.contains(&1.0));
+    assert!(xs.contains(&-1.0));
 }

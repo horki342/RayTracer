@@ -2,7 +2,7 @@ use nalgebra as na;
 use std::ops;
 
 const EPSILON: f64 = 0.0001;
-type Vector = na::Vector4<f64>;
+pub type Vector = na::Vector4<f64>;
 pub type Matrix = na::Matrix4<f64>;
 
 /// Structure that implements Color
@@ -25,7 +25,7 @@ impl Default for Color {
 
 impl PartialEq for Color {
     fn eq(&self, other: &Self) -> bool {
-        feq(&self.r, &other.r) && feq(&self.g, &other.g) && feq(&self.b, &other.b)
+        feq(self.r, other.r) && feq(self.g, other.g) && feq(self.b, other.b)
     }
 }
 
@@ -123,7 +123,7 @@ pub fn cross(a: &Vector, b: &Vector) -> Vector {
     vector(res.x, res.y, res.z)
 }
 
-pub fn feq(a: &f64, b: &f64) -> bool {
+pub fn feq(a: f64, b: f64) -> bool {
     (a - b).abs() < EPSILON
 }
 
@@ -135,11 +135,116 @@ pub fn meq(a: &Matrix, b: &Matrix) -> bool {
     (a - b).norm() < EPSILON
 }
 
-pub struct Transformations;
-impl Transformations {
-    pub fn translate(dx: f64, dy: f64, dz: f64) -> Matrix {
+#[derive(Debug)]
+pub struct Pipeline {
+    operations: Vec<Transformation>,
+}
+
+impl Pipeline {
+    pub fn new() -> Pipeline {
+        Pipeline {
+            operations: Vec::new(),
+        }
+    }
+
+    pub fn from(operations: Vec<Transformation>) -> Pipeline {
+        Pipeline {
+            operations: operations,
+        }
+    }
+
+    pub fn get_matrix(&self) -> Matrix {
+        let mut res = Matrix::identity();
+
+        for operation in &self.operations {
+            res = operation.get_matrix() * res;
+        }
+
+        res
+    }
+}
+
+#[macro_export]
+macro_rules! transform {
+    ( $( $x:expr ),* ) => {
+        {
+            let mut temp_vec = Vec::new();
+            $(
+                temp_vec.push($x);
+            )*
+            Pipeline::from(temp_vec)
+        }
+    };
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Transformation {
+    Translate(f64, f64, f64),
+    Scale(f64, f64, f64),
+    RotateX(f64),
+    RotateY(f64),
+    RotateZ(f64),
+    Shear(f64, f64, f64, f64, f64, f64),
+}
+
+impl Transformation {
+    fn translate(dx: f64, dy: f64, dz: f64) -> Matrix {
         let mut res = Matrix::identity();
         res.set_column(3, &Vector::new(dx, dy, dz, 1.0));
         res
+    }
+
+    fn scale(fx: f64, fy: f64, fz: f64) -> Matrix {
+        let mut res = Matrix::identity();
+        res.set_diagonal(&Vector::new(fx, fy, fz, 1.0));
+        res
+    }
+
+    fn rotate_x(angle: f64) -> Matrix {
+        let mut res = Matrix::identity();
+        res.set_column(1, &Vector::new(0.0, angle.cos(), angle.sin(), 0.0));
+        res.set_column(2, &Vector::new(0.0, -angle.sin(), angle.cos(), 0.0));
+
+        res
+    }
+
+    fn rotate_y(angle: f64) -> Matrix {
+        let mut res = Matrix::identity();
+        res.set_column(0, &Vector::new(angle.cos(), 0.0, -angle.sin(), 0.0));
+        res.set_column(2, &Vector::new(angle.sin(), 0.0, angle.cos(), 0.0));
+
+        res
+    }
+
+    fn rotate_z(angle: f64) -> Matrix {
+        let mut res = Matrix::identity();
+        res.set_column(0, &Vector::new(angle.cos(), angle.sin(), 0.0, 0.0));
+        res.set_column(1, &Vector::new(-angle.sin(), angle.cos(), 0.0, 0.0));
+
+        res
+    }
+
+    fn shear(xy: f64, xz: f64, yx: f64, yz: f64, zx: f64, zy: f64) -> Matrix {
+        let mut res = Matrix::identity();
+        res.set_column(0, &Vector::new(1.0, yx, zx, 0.0));
+        res.set_column(1, &Vector::new(xy, 1.0, zy, 0.0));
+        res.set_column(2, &Vector::new(xz, yz, 1.0, 0.0));
+
+        res
+    }
+
+    pub fn get_matrix(&self) -> Matrix {
+        match self {
+            Transformation::Translate(dx, dy, dz) => {
+                return Transformation::translate(*dx, *dy, *dz)
+            }
+            Transformation::Scale(fx, fy, fz) => return Transformation::scale(*fx, *fy, *fz),
+            Transformation::RotateX(angle) => return Transformation::rotate_x(*angle),
+            Transformation::RotateY(angle) => return Transformation::rotate_y(*angle),
+            Transformation::RotateZ(angle) => return Transformation::rotate_z(*angle),
+            Transformation::Shear(xy, xz, yx, yz, zx, zy) => {
+                return Transformation::shear(*xy, *xz, *yx, *yz, *zx, *zy)
+            }
+        }
     }
 }
