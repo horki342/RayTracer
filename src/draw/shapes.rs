@@ -1,12 +1,17 @@
 use crate::draw::*;
+use crate::intersections;
+use std::borrow::Borrow;
+use std::rc::Rc;
 
 pub trait Drawable {
     fn draw(&self, cv: &mut Canvas);
     fn transform(&mut self, pipeline: Pipeline);
     fn get_origin(&self) -> Vector;
+
+    fn get_info(&self) -> String;
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Material {
     color: Color,
 }
@@ -21,7 +26,7 @@ impl Material {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Ray {
     origin: Vector,
     direction: Vector,
@@ -41,7 +46,7 @@ impl Ray {
         return self.origin + self.direction * t;
     }
 
-    pub fn intersect_sphere<'a>(&self, sphere: &'a Sphere) -> Intersections<'a> {
+    pub fn intersect_sphere(&self, sphere: Rc<Sphere>) -> Intersections<Sphere> {
         let del = self.origin - sphere.center;
 
         let a = dot(&del, &del) - sphere.radius;
@@ -56,7 +61,7 @@ impl Ray {
             let t1 = (-b + discriminant.sqrt()) / c;
             let t2 = (-b - discriminant.sqrt()) / c;
 
-            return intersections!(Intersection::new(t1, sphere), Intersection::new(t2, sphere));
+            return intersections!(t1, sphere; t2, sphere.clone(););
         }
     }
 }
@@ -89,9 +94,108 @@ impl Drawable for Ray {
         self.origin = matrix * self.origin;
         self.direction = matrix * self.direction;
     }
+
+    fn get_info(&self) -> String {
+        format!("{:#?}", self)
+    }
 }
 
-#[derive(Debug)]
+#[derive(Clone)]
+pub struct Intersection<T: Drawable> {
+    t: f64,
+    obj: Rc<T>,
+}
+
+impl<T: Drawable + PartialEq> PartialEq for Intersection<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.t == other.t && self.obj == other.obj
+    }
+}
+
+impl<T: Drawable> Intersection<T> {
+    pub fn new(t: f64, obj: Rc<T>) -> Self {
+        Self { t, obj }
+    }
+
+    pub fn has(&self, t: f64) -> bool {
+        return t == self.t;
+    }
+}
+
+impl<T: Drawable> std::fmt::Debug for Intersection<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Intersection")
+            .field("t", &self.t)
+            .field("obj", &self.obj.get_info())
+            .finish()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Intersections<T: Drawable> {
+    data: Vec<Intersection<T>>,
+}
+
+impl<T: Drawable> Intersections<T> {
+    pub fn from(data: Vec<Intersection<T>>) -> Self {
+        Self { data }
+    }
+
+    pub fn has(&self, t: f64) -> bool {
+        for el in &self.data {
+            if el.has(t) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    pub fn len(&self) -> usize {
+        return self.data.len();
+    }
+
+    pub fn hit(&self) -> Option<&Intersection<T>> {
+        let res = self
+            .data
+            .iter()
+            .min_by(|a, b| a.t.abs().partial_cmp(&(b.t.abs())).unwrap());
+        match res {
+            Some(val) => {
+                if val.t < 0.0 {
+                    return None;
+                }
+                return Some(val);
+            }
+            None => return None,
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! intersections {
+    () => {
+        Intersections::from(Vec::new())
+    };
+
+    ($($i:expr),* $(,)?) => {{
+        use crate::draw::shapes::Intersections;
+
+        let mut vec = Vec::new();
+        $(
+            vec.push($i);
+        )*
+        Intersections::from(vec)
+    }};
+
+    ($t:expr, $obj:expr; $($rest:tt)*) => {{
+        let mut vec = intersections!($($rest)*).data;
+        vec.push(Intersection::new($t, $obj));
+        Intersections::from(vec)
+    }};
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub struct Point {
     point: Vector,
     material: Material,
@@ -126,9 +230,13 @@ impl Drawable for Point {
     fn transform(&mut self, pipeline: Pipeline) {
         self.point = pipeline.get_matrix() * self.point;
     }
+
+    fn get_info(&self) -> String {
+        format!("{:#?}", self)
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Sphere {
     center: Vector,
     radius: f64,
@@ -156,5 +264,9 @@ impl Drawable for Sphere {
 
     fn get_origin(&self) -> Vector {
         todo!()
+    }
+
+    fn get_info(&self) -> String {
+        format!("{:#?}", self)
     }
 }

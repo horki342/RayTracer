@@ -1,13 +1,13 @@
-use std::f64::consts::PI;
-
-use crate::draw;
-use crate::draw::shapes::Sphere;
+use crate::draw::shapes::{Intersection, Ray, Sphere};
 use crate::draw::Canvas;
-use crate::math::Transformation::*;
-use crate::math::*;
+
+use crate::math::{Transformation::*, *};
+
+use std::f64::consts::PI;
+use std::rc::Rc;
+
+use crate::intersections;
 use crate::transform;
-use draw::shapes::Material;
-use draw::shapes::Ray;
 
 #[test]
 fn tuple_operations() {
@@ -287,26 +287,52 @@ fn intersections() {
 
     // sphere-ray interactions
     let r = Ray::new(point(0.0, 0.0, -5.0), vector(0.0, 0.0, 1.0), col);
-    let s = Sphere::new(0.0, 0.0, 0.0, 1.0, col);
-    let xs = r.intersect_sphere(&s);
+    let s = Rc::new(Sphere::new(0.0, 0.0, 0.0, 1.0, col));
+    let xs = r.intersect_sphere(s.clone());
 
     assert_eq!(xs.len(), 2);
-    assert!(xs.contains(&4.0));
-    assert!(xs.contains(&6.0));
+    assert!(xs.has(4.0));
+    assert!(xs.has(6.0));
 
     let r = Ray::new(point(0.0, 1.0, -5.0), vector(0.0, 0.0, 1.0), col);
-    let xs = r.intersect_sphere(&s);
+    let xs = r.intersect_sphere(s.clone());
     assert_eq!(xs.len(), 2);
-    assert!(xs.contains(&5.0));
-    assert!(xs.contains(&5.0));
+    assert!(xs.has(5.0));
+    assert!(xs.has(5.0));
 
     let r = Ray::new(point(0.0, 2.0, -5.0), vector(0.0, 0.0, 1.0), col);
-    let xs = r.intersect_sphere(&s);
+    let xs = r.intersect_sphere(s.clone());
     assert_eq!(xs.len(), 0);
 
     let r = Ray::new(point(0.0, 0.0, 0.0), vector(0.0, 0.0, 1.0), col);
-    let xs = r.intersect_sphere(&s);
+    let xs = r.intersect_sphere(s.clone());
     assert_eq!(xs.len(), 2);
-    assert!(xs.contains(&1.0));
-    assert!(xs.contains(&-1.0));
+    assert!(xs.has(1.0));
+    assert!(xs.has(-1.0));
+
+    let i1 = Intersection::new(1.0, s.clone());
+    let i2 = Intersection::new(2.0, s.clone());
+    let xs = intersections!(i1.clone(), i2);
+    let i = xs.hit().unwrap();
+    assert_eq!(i, &i1);
+
+    let i1 = Intersection::new(-1.0, s.clone());
+    let i2 = Intersection::new(1.0, s.clone());
+    let xs = intersections!(i2.clone(), i1);
+    let i = xs.hit().unwrap();
+    assert_eq!(i, &i2);
+
+    let i1 = Intersection::new(-2.0, s.clone());
+    let i2 = Intersection::new(-1.0, s.clone());
+    let xs = intersections!(i2, i1);
+    let i = xs.hit();
+    assert_eq!(i, None);
+
+    let i1 = Intersection::new(5.0, s.clone());
+    let i2 = Intersection::new(7.0, s.clone());
+    let i3 = Intersection::new(-3.0, s.clone());
+    let i4 = Intersection::new(2.0, s.clone());
+    let xs = intersections!(i1, i2, i3, i4.clone());
+    let i = xs.hit().unwrap();
+    assert_eq!(i, &i4);
 }

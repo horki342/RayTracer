@@ -20,5 +20,6 @@ pub fn draw_clock() {
         p.transform(pl);
         scene.add(Box::new(p));
     }
-    scene.draw("clock.ppm")
+
+    scene.draw("clock.ppm");
 }
