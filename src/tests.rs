@@ -1,7 +1,7 @@
-use crate::draw::shapes::{Intersection, Ray, Sphere};
+use crate::draw::shapes::{Intersection, Ray, Sphere, Transformable};
 use crate::draw::Canvas;
 
-use crate::math::{Transformation::*, *};
+use crate::math::*;
 
 use std::f64::consts::PI;
 use std::rc::Rc;
@@ -265,9 +265,9 @@ fn transformations() {
 
     // chained transformation
     let pipeline = transform!(
-        RotateX(PI / 2.0),
-        Scale(5.0, 5.0, 5.0),
-        Translate(10.0, 5.0, 7.0)
+        Transformation::RotateX(PI / 2.0),
+        Transformation::Scale(5.0, 5.0, 5.0),
+        Transformation::Translate(10.0, 5.0, 7.0)
     )
     .get_matrix();
     let p = point(1.0, 0.0, 1.0);
@@ -279,14 +279,14 @@ fn intersections() {
     let col = color(0.5, 0.5, 0.5);
 
     // ray operations
-    let r = Ray::new(point(2.0, 3.0, 4.0), vector(1.0, 0.0, 0.0), col);
+    let mut r = Ray::new(point(2.0, 3.0, 4.0), vector(1.0, 0.0, 0.0));
     assert!(veq(&(r.pos(0.0)), &point(2.0, 3.0, 4.0)));
     assert!(veq(&(r.pos(1.0)), &point(3.0, 3.0, 4.0)));
     assert!(veq(&(r.pos(-1.0)), &point(1.0, 3.0, 4.0)));
     assert!(veq(&(r.pos(2.5)), &point(4.5, 3.0, 4.0)));
 
     // sphere-ray interactions
-    let r = Ray::new(point(0.0, 0.0, -5.0), vector(0.0, 0.0, 1.0), col);
+    let mut r = Ray::new(point(0.0, 0.0, -5.0), vector(0.0, 0.0, 1.0));
     let s = Rc::new(Sphere::new(0.0, 0.0, 0.0, 1.0, col));
     let xs = r.intersect_sphere(s.clone());
 
@@ -294,17 +294,17 @@ fn intersections() {
     assert!(xs.has(4.0));
     assert!(xs.has(6.0));
 
-    let r = Ray::new(point(0.0, 1.0, -5.0), vector(0.0, 0.0, 1.0), col);
+    let mut r = Ray::new(point(0.0, 1.0, -5.0), vector(0.0, 0.0, 1.0));
     let xs = r.intersect_sphere(s.clone());
     assert_eq!(xs.len(), 2);
     assert!(xs.has(5.0));
     assert!(xs.has(5.0));
 
-    let r = Ray::new(point(0.0, 2.0, -5.0), vector(0.0, 0.0, 1.0), col);
+    let mut r = Ray::new(point(0.0, 2.0, -5.0), vector(0.0, 0.0, 1.0));
     let xs = r.intersect_sphere(s.clone());
     assert_eq!(xs.len(), 0);
 
-    let r = Ray::new(point(0.0, 0.0, 0.0), vector(0.0, 0.0, 1.0), col);
+    let mut r = Ray::new(point(0.0, 0.0, 0.0), vector(0.0, 0.0, 1.0));
     let xs = r.intersect_sphere(s.clone());
     assert_eq!(xs.len(), 2);
     assert!(xs.has(1.0));
@@ -335,4 +335,43 @@ fn intersections() {
     let xs = intersections!(i1, i2, i3, i4.clone());
     let i = xs.hit().unwrap();
     assert_eq!(i, &i4);
+
+    // translating a ray
+    let mut r = Ray::new(point(1.0, 2.0, 3.0), vector(0.0, 1.0, 0.0));
+    let m = transform!(Transformation::Translate(3.0, 4.0, 5.0)).apply_to(&mut r);
+    let r2 = r.transformed();
+    assert!(veq(r2.get_origin(), &point(4.0, 6.0, 8.0)));
+    assert!(veq(r2.get_dir(), &vector(0.0, 1.0, 0.0)));
+
+    // scaling a ray
+    r.reset();
+    let m = transform!(Transformation::Scale(2.0, 3.0, 4.0)).apply_to(&mut r);
+    let r2 = r.transformed();
+    assert!(veq(&point(2.0, 6.0, 12.0), r2.get_origin()));
+    assert!(veq(&vector(0.0, 3.0, 0.0), r2.get_dir()));
+
+    // sphere's default transformation
+    let mut s = Sphere::default();
+    assert!(meq(&s.transform.get_matrix(), &Matrix::identity()));
+
+    s.transform.add(Transformation::Translate(2.0, 3.0, 4.0));
+    assert!(meq(
+        &s.transform.get_matrix(),
+        &Transformation::Translate(2.0, 3.0, 4.0).get_matrix()
+    ));
+
+    // intersecting a scaled sphere with a ray
+    let mut r = Ray::new(point(0.0, 0.0, -5.0), vector(0.0, 0.0, 1.0));
+    let mut s = Sphere::default();
+    s.add_transform(Transformation::Scale(2.0, 2.0, 2.0));
+    let xs = r.intersect_sphere(Rc::new(s));
+    assert_eq!(xs.len(), 2);
+    assert!(xs.has(3.0));
+    assert!(xs.has(7.0));
+
+    // intersecting a translated sphere with a ray
+    let mut s = Sphere::default();
+    s.add_transform(Transformation::Translate(5.0, 0.0, 0.0));
+    let xs = r.intersect_sphere(Rc::new(s));
+    assert_eq!(xs.len(), 0);
 }

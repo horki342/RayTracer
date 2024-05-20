@@ -1,17 +1,23 @@
 use crate::draw::*;
 use crate::intersections;
-use std::borrow::Borrow;
+use crate::transform;
 use std::rc::Rc;
 
 pub trait Drawable {
     fn draw(&self, cv: &mut Canvas);
-    fn transform(&mut self, pipeline: Pipeline);
-    fn get_origin(&self) -> Vector;
-
     fn get_info(&self) -> String;
 }
 
-#[derive(Debug, PartialEq, Clone)]
+pub trait Transformable {
+    fn transformed(&self) -> Self;
+    fn transform_this(&mut self);
+    fn reset(&mut self);
+    fn add_transform(&mut self, t: Transformation);
+    fn set_transforms(&mut self, pl: Pipeline);
+    fn get_transform(&self) -> &Pipeline;
+}
+
+#[derive(Debug, PartialEq, Clone, Copy, Default)]
 pub struct Material {
     color: Color,
 }
@@ -30,15 +36,15 @@ impl Material {
 pub struct Ray {
     origin: Vector,
     direction: Vector,
-    material: Material,
+    transform: Pipeline,
 }
 
 impl Ray {
-    pub fn new(origin: Vector, direction: Vector, color: Color) -> Self {
+    pub fn new(origin: Vector, direction: Vector) -> Self {
         Ray {
             origin,
             direction,
-            material: Material::new(color),
+            transform: transform!(),
         }
     }
 
@@ -46,7 +52,19 @@ impl Ray {
         return self.origin + self.direction * t;
     }
 
-    pub fn intersect_sphere(&self, sphere: Rc<Sphere>) -> Intersections<Sphere> {
+    pub fn get_origin(&self) -> &Vector {
+        &self.origin
+    }
+
+    pub fn get_dir(&self) -> &Vector {
+        &self.direction
+    }
+
+    pub fn intersect_sphere(&mut self, sphere: Rc<Sphere>) -> Intersections<Sphere> {
+        // apply Sphere's transformations
+        self.set_transforms(sphere.get_transform().clone());
+        self.transform_this();
+
         let del = self.origin - sphere.center;
 
         let a = dot(&del, &del) - sphere.radius;
@@ -66,37 +84,34 @@ impl Ray {
     }
 }
 
-impl Drawable for Ray {
-    fn draw(&self, cv: &mut Canvas) {
-        let mut t = 0.0;
-        loop {
-            let p = self.pos(t);
-            let x = p.x as usize;
-            let y = p.y as usize;
+impl Transformable for Ray {
+    fn transformed(&self) -> Self {
+        let matrix = self.transform.get_matrix();
 
-            match cv.write(x, y, self.material.color) {
-                Ok(_) => t += 0.001,
-                Err(err_text) => {
-                    println!("{}", err_text);
-                    break;
-                }
-            }
-        }
+        Self::new(matrix * self.origin, matrix * self.direction)
     }
 
-    fn get_origin(&self) -> Vector {
-        return self.origin;
-    }
-
-    fn transform(&mut self, pipeline: Pipeline) {
-        let matrix = pipeline.get_matrix();
+    fn transform_this(&mut self) {
+        let matrix = self.transform.get_matrix();
 
         self.origin = matrix * self.origin;
         self.direction = matrix * self.direction;
     }
 
-    fn get_info(&self) -> String {
-        format!("{:#?}", self)
+    fn set_transforms(&mut self, pl: Pipeline) {
+        self.transform = pl;
+    }
+
+    fn reset(&mut self) {
+        self.transform = transform!();
+    }
+
+    fn get_transform(&self) -> &Pipeline {
+        return &self.transform;
+    }
+
+    fn add_transform(&mut self, t: Transformation) {
+        self.transform.add(t);
     }
 }
 
@@ -198,6 +213,7 @@ macro_rules! intersections {
 #[derive(Debug, PartialEq, Clone)]
 pub struct Point {
     point: Vector,
+    transform: Pipeline,
     material: Material,
 }
 
@@ -205,8 +221,42 @@ impl Point {
     pub fn new(x: f64, y: f64, z: f64, color: Color) -> Self {
         Point {
             point: point(x, y, z),
+            transform: transform!(Transformation::None),
             material: Material::new(color),
         }
+    }
+}
+
+impl Transformable for Point {
+    fn transformed(&self) -> Self {
+        let matrix = self.transform.get_matrix();
+
+        Self {
+            point: matrix * self.point,
+            ..self.clone()
+        }
+    }
+
+    fn get_transform(&self) -> &Pipeline {
+        return &self.transform;
+    }
+
+    fn transform_this(&mut self) {
+        let matrix = self.transform.get_matrix();
+
+        self.point = matrix * self.point;
+    }
+
+    fn set_transforms(&mut self, pl: Pipeline) {
+        self.transform = pl;
+    }
+
+    fn reset(&mut self) {
+        self.transform = transform!();
+    }
+
+    fn add_transform(&mut self, t: Transformation) {
+        self.transform.add(t);
     }
 }
 
@@ -223,23 +273,16 @@ impl Drawable for Point {
         }
     }
 
-    fn get_origin(&self) -> Vector {
-        return self.point;
-    }
-
-    fn transform(&mut self, pipeline: Pipeline) {
-        self.point = pipeline.get_matrix() * self.point;
-    }
-
     fn get_info(&self) -> String {
         format!("{:#?}", self)
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Default, Debug, PartialEq, Clone)]
 pub struct Sphere {
     center: Vector,
     radius: f64,
+    pub transform: Pipeline,
     material: Material,
 }
 
@@ -248,6 +291,7 @@ impl Sphere {
         Sphere {
             center: point(x, y, z),
             radius: r,
+            transform: transform!(),
             material: Material::new(color),
         }
     }
@@ -258,15 +302,37 @@ impl Drawable for Sphere {
         todo!()
     }
 
-    fn transform(&mut self, pipeline: Pipeline) {
-        todo!()
-    }
-
-    fn get_origin(&self) -> Vector {
-        todo!()
-    }
-
     fn get_info(&self) -> String {
-        format!("{:#?}", self)
+        todo!()
+    }
+}
+
+impl Transformable for Sphere {
+    fn transformed(&self) -> Self {
+        let m = self.transform.get_matrix();
+        Self {
+            center: m * self.center,
+            ..self.clone()
+        }
+    }
+
+    fn transform_this(&mut self) {
+        self.center = self.transform.get_matrix() * self.center;
+    }
+
+    fn reset(&mut self) {
+        self.transform = transform!();
+    }
+
+    fn add_transform(&mut self, t: Transformation) {
+        self.transform.add(t);
+    }
+
+    fn set_transforms(&mut self, pl: Pipeline) {
+        self.transform = pl;
+    }
+
+    fn get_transform(&self) -> &Pipeline {
+        return &self.transform;
     }
 }

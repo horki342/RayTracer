@@ -1,6 +1,8 @@
 use nalgebra as na;
 use std::ops;
 
+use crate::draw::shapes::Transformable;
+
 const EPSILON: f64 = 0.0001;
 pub type Vector = na::Vector4<f64>;
 pub type Matrix = na::Matrix4<f64>;
@@ -135,9 +137,17 @@ pub fn meq(a: &Matrix, b: &Matrix) -> bool {
     (a - b).norm() < EPSILON
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Pipeline {
     operations: Vec<Transformation>,
+}
+
+impl Default for Pipeline {
+    fn default() -> Self {
+        Self {
+            operations: vec![Transformation::None],
+        }
+    }
 }
 
 impl Pipeline {
@@ -162,10 +172,32 @@ impl Pipeline {
 
         res
     }
+
+    pub fn add(&mut self, t: Transformation) {
+        self.operations.push(t);
+    }
+
+    pub fn set_to<T: Transformable>(&self, obj: &mut T) {
+        obj.set_transforms(self.to_owned());
+    }
+
+    pub fn apply_to<T: Transformable>(&self, obj: &mut T) {
+        obj.set_transforms(self.to_owned());
+        obj.transform_this();
+    }
+
+    pub fn applied<T: Transformable>(&self, obj: &mut T) -> T {
+        obj.set_transforms(self.to_owned());
+        return obj.transformed();
+    }
 }
 
 #[macro_export]
 macro_rules! transform {
+    () => {
+        transform!(Transformation::None)
+    };
+
     ( $( $x:expr ),* ) => {
         {
             let mut temp_vec = Vec::new();
@@ -177,7 +209,7 @@ macro_rules! transform {
     };
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Transformation {
     Translate(f64, f64, f64),
     Scale(f64, f64, f64),
@@ -185,6 +217,7 @@ pub enum Transformation {
     RotateY(f64),
     RotateZ(f64),
     Shear(f64, f64, f64, f64, f64, f64),
+    None,
 }
 
 impl Transformation {
@@ -235,6 +268,7 @@ impl Transformation {
 
     pub fn get_matrix(&self) -> Matrix {
         match self {
+            Transformation::None => return Matrix::identity(),
             Transformation::Translate(dx, dy, dz) => {
                 return Transformation::translate(*dx, *dy, *dz)
             }

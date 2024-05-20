@@ -1,6 +1,6 @@
 use std::f64::consts::PI;
 
-use ray_tracer::draw::shapes::Drawable;
+use ray_tracer::draw::shapes::Transformable;
 use ray_tracer::draw::{shapes, Scene};
 use ray_tracer::{math::*, transform};
 
@@ -15,9 +15,9 @@ pub fn draw_clock() {
             Transformation::Translate(50.0, 0.0, 0.0),
             Transformation::RotateZ(i as f64 * (PI / 6.0)),
             Transformation::Translate(100.0, 100.0, 0.0)
-        );
+        )
+        .apply_to(&mut p);
 
-        p.transform(pl);
         scene.add(Box::new(p));
     }
 
