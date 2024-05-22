@@ -20,7 +20,4 @@ pdfs/
 *.drawio.bkp
 
 # Local deprecated files
-_deprecated/
-
-# .vscode configs
-/.vscode
+deprecated/
