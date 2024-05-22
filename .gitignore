@@ -12,3 +12,15 @@ Cargo.lock
 
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
+
+# pdfs of UML diagrams
+pdfs/
+
+# Backups of UML diagrams
+*.drawio.bkp
+
+# Local deprecated files
+_deprecated/
+
+# .vscode configs
+/.vscode
