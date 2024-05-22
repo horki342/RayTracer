@@ -1,12 +1,11 @@
 use std::f64::consts::PI;
-use std::rc::Rc;
 
 use super::math::utils::*;
 use super::math::{Color, Matrix, TUnit, Transformation};
-use super::render::Canvas;
 
+use super::render::Canvas;
 use crate::render::core::{Intersection, Ray};
-use crate::render::shapes::Sphere;
+use crate::render::shapes::{Drawable, Sphere};
 use crate::{create_intersections, transform};
 
 #[test]
@@ -283,7 +282,7 @@ fn transformations() {
 }
 
 #[test]
-fn ray_operations() {
+fn ray_operations_and_intersections() {
     // Computing a point from a distance
     let r = Ray::new(point(2.0, 3.0, 4.0), vector(1.0, 0.0, 0.0));
     assert!(veq(&r.pos(0.0), &point(2.0, 3.0, 4.0)));
@@ -359,4 +358,45 @@ fn ray_operations() {
     let xs = create_intersections!(i1, i2, i3, i4.clone());
     let i = xs.hit().unwrap();
     assert_eq!(i, &i4);
+
+    // Translating a ray
+    let r = Ray::new(point(1.0, 2.0, 3.0), vector(0.0, 1.0, 0.0));
+    let m = TUnit::Translate(3.0, 4.0, 5.0);
+    let r2 = &m * r;
+    assert!(veq(&r2.origin, &point(4.0, 6.0, 8.0)));
+    assert!(veq(&r2.direction, &vector(0.0, 1.0, 0.0)));
+
+    // Scaling a ray
+    let r = Ray::new(point(1.0, 2.0, 3.0), vector(0.0, 1.0, 0.0));
+    let m = TUnit::Scale(2.0, 3.0, 4.0);
+    let r2 = &m * r;
+    assert!(veq(&r2.origin, &point(2.0, 6.0, 12.0)));
+    assert!(veq(&r2.direction, &vector(0.0, 3.0, 0.0)));
+
+    // Sphere's default transformation
+    let s = Sphere::default();
+    assert!(meq(&s.borrow().t.matrix(), &Matrix::identity()));
+
+    // Changing a sphere's transformation
+    let s = Sphere::default();
+    let t = transform!(TUnit::Translate(2.0, 3.0, 4.0));
+    s.borrow_mut().set_transform(t.clone());
+    assert!(meq(&s.borrow_mut().t.matrix(), &t.matrix()));
+
+    // Intersecting a scaled sphere with a ray
+    let r = Ray::new(point(0.0, 0.0, -5.0), vector(0.0, 0.0, 1.0));
+    let s = Sphere::default();
+    s.borrow_mut()
+        .set_transform(transform!(TUnit::Scale(2.0, 2.0, 2.0)));
+    let xs = r.intersect_sphere(s);
+    assert_eq!(xs.count(), 2_usize);
+    assert!(xs.contains(3.0));
+    assert!(xs.contains(7.0));
+
+    // Intersecting a translated sphere with a ray
+    let s = Sphere::default();
+    s.borrow_mut()
+        .set_transform(transform!(TUnit::Translate(5.0, 0.0, 0.0)));
+    let xs = r.intersect_sphere(s);
+    assert_eq!(xs.count(), 0_usize);
 }

@@ -1,6 +1,8 @@
 use nalgebra as na;
 use std::ops;
 
+use super::render::core::Ray;
+
 pub mod utils;
 
 /// The only Vector-type used in the application.
@@ -203,6 +205,26 @@ impl TUnit {
                 TUnit::shear_matrix(*xy, *xz, *yx, *yz, *zx, *zy)
             }
         }
+    }
+}
+
+impl ops::Mul<Vector> for &TUnit {
+    type Output = Vector;
+
+    /// Applies a single tranformation unit (TUnit) to a vector via Matrix-Vector multiplication
+    fn mul(self, rhs: Vector) -> Self::Output {
+        return self.matrix() * rhs;
+    }
+}
+
+impl ops::Mul<Ray> for &TUnit {
+    type Output = Ray;
+
+    /// Applies a single transformation unit (TUnit) to a ray
+    fn mul(self, rhs: Ray) -> Self::Output {
+        let mat = self.matrix();
+
+        return Ray::new(&mat * rhs.origin, &mat * rhs.direction);
     }
 }
 

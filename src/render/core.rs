@@ -1,9 +1,10 @@
 use crate::create_intersections;
-use crate::math::{utils, Vector};
+use crate::math::{utils, Matrix, Vector};
 
 use super::shapes::{Drawable, Sphere};
 
 use std::cell::RefCell;
+use std::ops;
 use std::{fmt::Debug, rc::Rc};
 
 /// Structure that implements Ray
@@ -26,11 +27,21 @@ impl Ray {
 
     /// Intersect the sphere
     pub fn intersect_sphere(&self, sphere: Rc<RefCell<Sphere>>) -> Intersections<Sphere> {
-        let del = self.origin - sphere.borrow().c;
+        let s = sphere.borrow_mut();
 
-        let a = utils::dot(&del, &del) - sphere.borrow().r;
-        let b = utils::dot(&self.direction, &del);
-        let c = utils::dot(&self.direction, &self.direction);
+        // inversed Sphere's transformation matrix
+        let st_inv =
+            s.t.inverse()
+                .expect("Could not invert the Sphere's Transformation");
+
+        // apply the inverse of sphere's transformation onto the ray
+        let r = &st_inv * self;
+
+        let del = r.origin - s.c;
+
+        let a = utils::dot(&del, &del) - s.r;
+        let b = utils::dot(&r.direction, &del);
+        let c = utils::dot(&r.direction, &r.direction);
 
         let discriminant = b * b - a * c;
 
@@ -45,6 +56,15 @@ impl Ray {
                 t2, sphere.clone();
             )
         }
+    }
+}
+
+impl ops::Mul<&Ray> for &Matrix {
+    type Output = Ray;
+
+    /// Applies matrix transformation to a ray
+    fn mul(self, rhs: &Ray) -> Self::Output {
+        return Ray::new(self * rhs.origin, self * rhs.direction);
     }
 }
 

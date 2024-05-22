@@ -51,7 +51,7 @@ impl Sphere {
 }
 
 impl Drawable for Sphere {
-    fn draw(&self, cv: &mut Canvas) {
+    fn draw(&self, _cv: &mut Canvas) {
         todo!()
     }
 
