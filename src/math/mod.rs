@@ -49,6 +49,10 @@ impl Color {
             Color::cvt(self.b),
         )
     }
+
+    pub fn black() -> Self {
+        utils::color(0.0, 0.0, 0.0)
+    }
 }
 impl Default for Color {
     /// return a default black color

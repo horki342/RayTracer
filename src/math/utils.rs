@@ -94,3 +94,8 @@ macro_rules! transform {
         }
     };
 }
+
+/// reflects a vector across a (normal) vector
+pub fn reflect(v: &Vector, n: &Vector) -> Vector {
+    return v - 2.0 * n * dot(n, v);
+}

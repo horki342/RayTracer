@@ -4,7 +4,7 @@ use super::math::utils::*;
 use super::math::{Color, Matrix, TUnit, Transformation};
 
 use super::render::Canvas;
-use crate::render::core::{Intersection, Ray};
+use crate::render::core::{Intersection, Material, PointLight, Ray};
 use crate::render::shapes::{Drawable, Sphere};
 use crate::{create_intersections, transform};
 
@@ -399,4 +399,115 @@ fn ray_operations_and_intersections() {
         .set_transform(transform!(TUnit::Translate(5.0, 0.0, 0.0)));
     let xs = r.intersect_sphere(s);
     assert_eq!(xs.count(), 0_usize);
+}
+
+#[test]
+fn compute_surface_normals_and_reflection_vectors() {
+    let s = Sphere::default();
+
+    // The normal on a sphere at a point on the x axis
+    let n = s.borrow().normal(&point(1.0, 0.0, 0.0));
+    assert!(veq(&n, &vector(1.0, 0.0, 0.0)));
+
+    // The normal on a sphere at a point on the y axis
+    let n = s.borrow().normal(&point(0.0, 1.0, 0.0));
+    assert!(veq(&n, &vector(0.0, 1.0, 0.0)));
+
+    // The normal on a sphere at a point on the z axis
+    let n = s.borrow().normal(&point(0.0, 0.0, 1.0));
+    assert!(veq(&n, &vector(0.0, 0.0, 1.0)));
+
+    // The normal on a sphere at a nonaxial point AND the normal is a normalized vector
+    let t = 3_f64.sqrt() / 3.0;
+    let n = s.borrow().normal(&point(t, t, t));
+    assert!(veq(&n, &vector(t, t, t)));
+    assert!(veq(&n, &n.normalize()));
+
+    // Computing the normal on a translated sphere
+    let s = Sphere::default();
+    s.borrow_mut().apply_tunit(TUnit::Translate(0.0, 1.0, 0.0));
+    let n = s.borrow().normal(&point(0.0, 1.70711, -0.70711));
+    assert!(veq(&n, &vector(0.0, 0.70711, -0.70711)));
+
+    // Computing the normal on a transformed sphere
+    let s = Sphere::default();
+    s.borrow_mut().set_transform(transform!(
+        TUnit::RotateZ(PI / 5.0),
+        TUnit::Scale(1.0, 0.5, 1.0)
+    ));
+    let t = 2_f64.sqrt() / 2.0;
+    let n = s.borrow().normal(&point(0.0, t, -t));
+    assert!(veq(&n, &vector(0.0, 0.97014, -0.24254)));
+
+    // Reflecting a vector approaching at 45 degrees
+    let v = vector(1.0, -1.0, 0.0);
+    let n = vector(0.0, 1.0, 0.0);
+    let r = reflect(&v, &n);
+    assert!(veq(&r, &vector(1.0, 1.0, 0.0)));
+
+    // Reflecting a vector off a slanted surface
+    let v = vector(0.0, -1.0, 0.0);
+    let n = vector(t, t, 0.0);
+    let r = reflect(&v, &n);
+    assert!(veq(&r, &vector(1.0, 0.0, 0.0)));
+}
+
+#[test]
+fn check_phong_reflection_model_for_sphere() {
+    // The default material
+    let m = Material::default();
+    assert!(feq(m.ambient, 0.1));
+    assert!(feq(m.diffuse, 0.9));
+    assert!(feq(m.specular, 0.9));
+    assert_eq!(color(1.0, 1.0, 1.0), m.color);
+
+    // A sphere has a default material
+    let s = Sphere::default();
+    assert_eq!(s.borrow().m, Material::default());
+
+    // A sphere may be assigned a material
+    let s = Sphere::default();
+    let mut m = Material::default();
+    m.ambient = 1.0;
+    s.borrow_mut().set_material(m.clone());
+    assert_eq!(s.borrow().m, m);
+
+    // Background for Phong Reflection Model
+    let m = Material::default();
+    let pos = point(0.0, 0.0, 0.0);
+
+    // Lighting with the eye between the light and the surface
+    let eyev = vector(0.0, 0.0, -1.0);
+    let normalv = vector(0.0, 0.0, -1.0);
+    let light = PointLight::new(point(0.0, 0.0, -10.0), color(1.0, 1.0, 1.0));
+    let result = light.shade(&m, &pos, &eyev, &normalv);
+    assert_eq!(result, color(1.9, 1.9, 1.9));
+
+    // Lighting with the eye between light and surface, eye offset 45 degrees
+    let eyev = vector(0.0, 2_f64.sqrt() / 2.0, -2_f64.sqrt() / 2.0);
+    let normalv = vector(0.0, 0.0, -1.0);
+    let light = PointLight::new(point(0.0, 0.0, -10.0), color(1.0, 1.0, 1.0));
+    let result = light.shade(&m, &pos, &eyev, &normalv);
+    assert_eq!(result, color(1.0, 1.0, 1.0));
+
+    // Lighting with eye opposite surface, light offset 45 degrees
+    let eyev = vector(0.0, 0.0, -1.0);
+    let normalv = vector(0.0, 0.0, -1.0);
+    let light = PointLight::new(point(0.0, 10.0, -10.0), color(1.0, 1.0, 1.0));
+    let result = light.shade(&m, &pos, &eyev, &normalv);
+    assert_eq!(result, color(0.7364, 0.7364, 0.7364));
+
+    // Lighting with eye in the path of the reflection vector
+    let eyev = vector(0.0, -2_f64.sqrt() / 2.0, -2_f64.sqrt() / 2.0);
+    let normalv = vector(0.0, 0.0, -1.0);
+    let light = PointLight::new(point(0.0, 10.0, -10.0), color(1.0, 1.0, 1.0));
+    let result = light.shade(&m, &pos, &eyev, &normalv);
+    assert_eq!(result, color(1.6364, 1.6364, 1.6364));
+
+    // Lighting with the light behind the surface
+    let eyev = vector(0.0, 0.0, -1.0);
+    let normalv = vector(0.0, 0.0, -1.0);
+    let light = PointLight::new(point(0.0, 0.0, 10.0), color(1.0, 1.0, 1.0));
+    let result = light.shade(&m, &pos, &eyev, &normalv);
+    assert_eq!(result, color(0.1, 0.1, 0.1));
 }

@@ -1,5 +1,5 @@
 use crate::create_intersections;
-use crate::math::{utils, Matrix, Vector};
+use crate::math::{utils, Color, Matrix, Vector};
 
 use super::shapes::{Drawable, Sphere};
 
@@ -70,8 +70,8 @@ impl ops::Mul<&Ray> for &Matrix {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Intersection<T: Drawable> {
-    t: f64,
-    obj: Rc<RefCell<T>>,
+    pub t: f64,
+    pub obj: Rc<RefCell<T>>,
 }
 
 impl<T: Drawable> Intersection<T> {
@@ -148,4 +148,108 @@ macro_rules! create_intersections {
         vec.push(Intersection::new($t, $obj));
         Intersections::from(vec)
     }};
+}
+
+/// Point Light Source with no size
+pub struct PointLight {
+    pos: Vector,
+    int: Color, // intensity
+}
+
+impl PointLight {
+    pub fn new(pos: Vector, int: Color) -> Self {
+        Self { pos, int }
+    }
+
+    /// Shades individual world pixels based on the Phong Reflection Model, returning Color value at the point.
+    /// m - Material of the object where the world pixel belongs to;
+    /// p - The position of the point;
+    /// e - Eye vector of the camera;
+    /// n - Normal to the object at the world pixel;
+    pub fn shade(&self, m: &Material, p: &Vector, e: &Vector, n: &Vector) -> Color {
+        // combine the surface color with the light's intensity
+        let eff_col = self.int * m.color; // effective color
+
+        // find the direction to the light source
+        let l = (self.pos - p).normalize();
+
+        // compute the ambient contribution
+        let ambient = eff_col * m.ambient;
+
+        let diffuse: Color;
+        let specular: Color;
+
+        // ldn represents the cosine of the angle between the
+        // light vector and the normal vector. A negative number means
+        // the light is on the other side of the surface
+        let ldn = utils::dot(&l, n); // light_dot_normal
+        if ldn < 0.0 {
+            diffuse = Color::black();
+            specular = Color::black();
+        } else {
+            // compute the diffusion contribution
+            diffuse = eff_col * m.diffuse * ldn;
+
+            // reflected light vector
+            let r = utils::reflect(&(-l), n);
+
+            // rde represents the cosine of the angle between the
+            // reflection vector and the eye vector. A negative number means the
+            // light reflects away from the eye.
+            let rde = utils::dot(&r, e); // reflect_dot_eye
+            if rde <= 0.0 {
+                specular = Color::black();
+            } else {
+                // compute the specular contribution
+                let factor = rde.powf(m.shininess);
+                specular = self.int * m.specular * factor;
+            }
+        }
+
+        let res = ambient + specular + diffuse;
+        return res;
+    }
+}
+
+impl Default for PointLight {
+    fn default() -> Self {
+        Self {
+            pos: utils::point(0.0, 0.0, 0.0),
+            int: utils::color(1.0, 1.0, 1.0),
+        }
+    }
+}
+
+/// Phong Reflection Model's material data structure
+#[derive(Debug, Clone, PartialEq)]
+pub struct Material {
+    pub color: Color,
+    pub ambient: f64,
+    pub diffuse: f64,
+    pub specular: f64,
+    pub shininess: f64,
+}
+
+impl Material {
+    pub fn new(color: Color, ambient: f64, diffuse: f64, specular: f64, shininess: f64) -> Self {
+        Self {
+            color,
+            ambient,
+            diffuse,
+            specular,
+            shininess,
+        }
+    }
+}
+
+impl Default for Material {
+    fn default() -> Self {
+        Self {
+            color: utils::color(1.0, 1.0, 1.0),
+            ambient: 0.1,
+            diffuse: 0.9,
+            specular: 0.9,
+            shininess: 200.0,
+        }
+    }
 }
