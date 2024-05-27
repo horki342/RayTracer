@@ -1,13 +1,11 @@
-use self::shapes::Drawable;
+use self::core::Drawable;
 
 use super::math::Color;
 
-use std::cell::RefCell;
 use std::fs::File;
 use std::io::Write;
 use std::ops;
 use std::path::PathBuf;
-use std::rc::Rc;
 
 pub mod core;
 pub mod shapes;
@@ -29,8 +27,8 @@ impl Renderer {
 
     /// Render objects from the world onto the canvas
     pub fn render(&mut self) {
-        for obj in &self.world.objects {
-            obj.borrow_mut().draw(&mut self.cv);
+        for obj in self.world.objects.iter() {
+            obj.draw(&mut self.cv);
         }
     }
 
@@ -47,7 +45,7 @@ impl Renderer {
 
 /// Structure that holds objects, their inner data, and overall configurations of the virtual world
 pub struct World {
-    pub objects: Vec<Rc<RefCell<dyn Drawable>>>,
+    pub objects: Vec<Box<dyn Drawable>>,
 }
 
 impl World {
@@ -57,7 +55,7 @@ impl World {
     }
 
     /// Adds an object
-    pub fn add(&mut self, obj: Rc<RefCell<dyn Drawable>>) {
+    pub fn add(&mut self, obj: Box<dyn Drawable>) {
         self.objects.push(obj);
     }
 }

@@ -1,148 +1,158 @@
-use std::cell::RefCell;
-use std::rc::Rc;
+//! Contains all Drawable Shapes and other Drawable Objects
+//! Each specific shape has a "shape" field that contains general
+//! functionality of each Drawable object
 
-use super::core::Material;
-use super::Canvas;
+use super::core::*;
 
-use crate::math::utils::point;
-use crate::math::{utils, Color, TUnit};
-use crate::math::{Transformation, Vector};
-use crate::transform;
+use crate::math::{utils, Vector};
+use crate::{math, tvalues};
 
-/// Trait that allows objects to be drawn on the Canvas.
-/// It requires intersect methods that allows to find intersections of a given ray with the object.
-pub trait Drawable: std::fmt::Debug {
-    /// Draw the object to the Canvas
-    fn draw(&self, cv: &mut Canvas);
+// begin Sphere ===========================================================================================
 
-    /// Set the transformation to the object
-    fn set_transform(&mut self, t: Transformation);
-
-    /// Set single transformation to the object
-    fn apply_tunit(&mut self, t: TUnit);
-
-    /// Returns a normal vector at a given point
-    fn normal(&self, _p: &Vector) -> Vector {
-        panic!("Could not find the normal of the Drawable object");
-    }
-
-    /// Set a Material
-    fn set_material(&mut self, _material: Material) {
-        panic!("Could not set Material to the Drawable object");
-    }
-}
-
-/// Structure that implements a Drawable
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub struct Sphere {
-    /// center of the sphere
+    shape: Shape,
+
+    /// Center of the sphere
     pub c: Vector,
 
-    /// radius of the sphere
+    /// Radius of the sphere
     pub r: f64,
-
-    /// transformation of the sphere
-    pub t: Transformation,
-
-    /// material
-    pub m: Material,
 }
 
-impl Sphere {
-    /// Creates an instance of the Sphere with default transformation.
-    pub fn new(
-        c: Vector,
-        r: f64,
-        color: Color,
-        ambient: f64,
-        diffuse: f64,
-        specular: f64,
-        shininess: f64,
-    ) -> Rc<RefCell<Self>> {
-        Rc::new(RefCell::new(Self {
-            c,
-            r,
-            t: Transformation::default(),
-            m: Material::new(color, ambient, diffuse, specular, shininess),
-        }))
-    }
-
-    /// Creates a unit sphere centered in the origin.
-    pub fn default() -> Rc<RefCell<Self>> {
-        Rc::new(RefCell::new(Self {
+impl Default for Sphere {
+    fn default() -> Self {
+        Self {
+            shape: Shape::default(),
             c: utils::point(0.0, 0.0, 0.0),
             r: 1.0,
-            t: Transformation::default(),
-            m: Material::default(),
-        }))
+        }
     }
 }
 
 impl Drawable for Sphere {
-    fn draw(&self, _cv: &mut Canvas) {
-        todo!()
+    fn draw(&self, cv: &mut super::Canvas) {
+        self.shape.draw(cv);
+        todo!("Implement draw() for Sphere");
     }
 
-    fn set_transform(&mut self, t: Transformation) {
-        self.t = t;
+    fn set_transform(&mut self, t: math::Transformation) {
+        self.shape.set_transform(t)
     }
 
-    /// p_wld = point in world coordinates
-    fn normal(&self, p_wld: &Vector) -> Vector {
-        // transform point
-        let m = self.t.inverse().unwrap();
-        let p_obj = &m * p_wld;
-        let n_obj = p_obj - point(0.0, 0.0, 0.0);
-        let mut n_wld = m.transpose() * n_obj;
-        n_wld.w = 0.0;
-        n_wld.normalize_mut();
-
-        return n_wld;
+    fn set_tunit(&mut self, t_unit: math::TUnit) {
+        self.shape.set_tunit(t_unit)
     }
 
-    fn apply_tunit(&mut self, t: TUnit) {
-        self.t = transform!(t);
+    fn set_material(&mut self, m: Material) {
+        self.shape.set_material(m)
     }
 
-    fn set_material(&mut self, material: Material) {
-        self.m = material;
+    fn local_normal(&self, obj_p: &Vector) -> Vector {
+        let obj_n = obj_p - self.c;
+        return obj_n;
+    }
+
+    fn local_intersect(&self, obj_r: &Ray) -> Tvalues {
+        let del = obj_r.origin - self.c;
+
+        let a = utils::dot(&del, &del) - self.r;
+        let b = utils::dot(&obj_r.direction, &del);
+        let c = utils::dot(&obj_r.direction, &obj_r.direction);
+
+        // Calculate Discriminant
+        let d = b * b - a * c;
+
+        // if there are intersections, return their t-values
+        if d >= 0.0 {
+            let t1 = (-b + d.sqrt()) / c;
+            let t2 = (-b - d.sqrt()) / c;
+
+            return tvalues!(t1, t2);
+        }
+
+        // otherwise return an empty vector
+        tvalues!()
+    }
+
+    fn get_transform(&self) -> &math::Transformation {
+        self.shape.get_transform()
+    }
+
+    fn get_material(&self) -> &Material {
+        self.shape.get_material()
+    }
+
+    fn get_material_mut(&mut self) -> &mut Material {
+        self.shape.get_material_mut()
     }
 }
 
-/// Structure that implements a Drawable Point
-#[derive(Debug, PartialEq, Clone)]
+// end Sphere ===========================================================================================
+
+// begin Point ===========================================================================================
+
+#[derive(Debug, Clone)]
 pub struct Point {
+    shape: Shape,
+
+    /// Position of the point
     pos: Vector,
-    t: Transformation,
-    color: Color,
 }
 
 impl Point {
-    pub fn new(x: f64, y: f64, z: f64, col: Color) -> Rc<RefCell<Self>> {
-        Rc::new(RefCell::new(Self {
+    pub fn new(x: f64, y: f64, z: f64, col: math::Color) -> Self {
+        let mut res = Self {
+            shape: Shape::default(),
             pos: utils::point(x, y, z),
-            t: transform!(),
-            color: col,
-        }))
+        };
+
+        res.get_material_mut().change_color(col);
+        res
     }
 }
 
 impl Drawable for Point {
-    fn draw(&self, cv: &mut Canvas) {
+    fn draw(&self, cv: &mut super::Canvas) {
         // transformed point
-        let trp = &self.t * self.pos;
+        let trp = self.get_transform() * self.pos;
         let x = trp.x.round() as usize;
         let y = trp.y.round() as usize;
 
-        cv.write(x, y, self.color)
+        cv.write(x, y, self.get_material().color)
             .expect("Could not draw the Point");
     }
 
-    fn set_transform(&mut self, t: Transformation) {
-        self.t = t;
+    fn set_transform(&mut self, t: math::Transformation) {
+        self.shape.set_transform(t);
     }
 
-    fn apply_tunit(&mut self, t: TUnit) {
-        self.t = transform!(t);
+    fn set_tunit(&mut self, t_unit: math::TUnit) {
+        self.shape.set_tunit(t_unit);
+    }
+
+    fn set_material(&mut self, m: Material) {
+        self.shape.set_material(m);
+    }
+
+    fn get_transform(&self) -> &math::Transformation {
+        self.shape.get_transform()
+    }
+
+    fn get_material(&self) -> &Material {
+        self.shape.get_material()
+    }
+
+    fn get_material_mut(&mut self) -> &mut Material {
+        self.shape.get_material_mut()
+    }
+
+    fn wrap(self) -> std::rc::Rc<std::cell::RefCell<dyn Drawable>>
+    where
+        Self: Sized + 'static,
+    {
+        std::rc::Rc::new(std::cell::RefCell::new(self))
     }
 }
+
+// end Point ===========================================================================================

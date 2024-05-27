@@ -18,6 +18,30 @@ pub fn meq(a: &Matrix, b: &Matrix) -> bool {
     (a - b).norm() < EPSILON
 }
 
+#[macro_export]
+/// Utility that expand vassert!(Vector, Vector) to assert!(veq(&Vector, &Vector))
+macro_rules! vassert {
+    ($v1:expr, $v2:expr) => {
+        assert!(crate::math::utils::veq(&$v1, &$v2));
+    };
+}
+
+#[macro_export]
+/// Utility that expand fassert!(f64, f64) to assert!(feq(f64, f64))
+macro_rules! fassert {
+    ($f1:expr, $f2:expr) => {
+        assert!(crate::math::utils::feq($f1, $f2));
+    };
+}
+
+#[macro_export]
+/// Utility that expand massert!(Matrix, Matrix) to assert!(meq(&Matrix, &Matrix))
+macro_rules! massert {
+    ($m1:expr, $m2:expr) => {
+        assert!(crate::math::utils::meq(&$m1, &$m2));
+    };
+}
+
 /// Returns a color with a specified RGB-color
 pub fn color(r: f64, g: f64, b: f64) -> Color {
     Color::new(r, g, b)

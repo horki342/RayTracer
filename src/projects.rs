@@ -1,7 +1,6 @@
 use ray_tracer::math::utils::*;
 use ray_tracer::math::*;
-use ray_tracer::render::core::PointLight;
-use ray_tracer::render::shapes::Drawable;
+use ray_tracer::render::core::{Drawable as _, Is, PointLight, II as _};
 use ray_tracer::*;
 
 use std::f64::consts::PI;
@@ -11,7 +10,7 @@ pub fn draw_clock() {
     app.reset(color(0.2, 0.2, 0.2));
 
     for i in 0..12 {
-        let p = render::shapes::Point::new(0.0, 0.0, 0.0, color(0.5, 0.5, 0.5));
+        let mut p = render::shapes::Point::new(0.0, 0.0, 0.0, color(0.5, 0.5, 0.5));
 
         let transform = transform!(
             TUnit::Translate(50.0, 0.0, 0.0),
@@ -19,8 +18,8 @@ pub fn draw_clock() {
             TUnit::Translate(100.0, 100.0, 0.0)
         );
 
-        p.borrow_mut().set_transform(transform);
-        app.world.add(p);
+        p.set_transform(transform);
+        app.world.add(p.wrap_box());
     }
 
     app.render();
@@ -74,10 +73,13 @@ pub fn draw_sphere() {
     let half = wall_size / 2.0;
 
     let mut cv = render::Canvas::new(cv_size, cv_size);
-    let sphere = render::shapes::Sphere::default();
+    let sphere = render::shapes::Sphere::default().wrap();
 
     // assign color to the sphere
-    sphere.borrow_mut().m.color = color(1.0, 0.2, 1.0);
+    sphere
+        .borrow_mut()
+        .get_material_mut()
+        .change_color(color(1.0, 0.2, 1.0));
 
     // create a light source
     let light = PointLight::new(point(-10.0, 10.0, -10.0), color(1.0, 1.0, 1.0));
@@ -93,7 +95,8 @@ pub fn draw_sphere() {
             let look_at_point = point(world_x, world_y, wall_z);
 
             let r = render::core::Ray::new(ray_origin, (look_at_point - ray_origin).normalize());
-            let xs = r.intersect_sphere(sphere.clone());
+            let ts = sphere.borrow().intersect(&r);
+            let xs = Is::create(ts, sphere.clone());
 
             match xs.hit() {
                 Some(hit) => {
@@ -103,7 +106,8 @@ pub fn draw_sphere() {
                     let eye = -r.direction;
 
                     // calculate the resultant color
-                    let color = light.shade(&hit.obj.borrow().m, &point, &eye, &normal);
+                    let color =
+                        light.shade(&hit.obj.borrow().get_material(), &point, &eye, &normal);
                     cv.write(j, i, color)
                         .expect("Could not write the pixel on Canvas");
                 }
