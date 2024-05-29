@@ -1,9 +1,9 @@
 use ray_tracer::math::utils::*;
 use ray_tracer::math::*;
-use ray_tracer::render::core::{Drawable as _, Is, PointLight, II as _};
+use ray_tracer::render::core::PointLight;
 use ray_tracer::*;
 use render::core::Drawable;
-use render::shapes::{Point, Sphere};
+use render::shapes::Sphere;
 use render::Renderer;
 
 use std::f64::consts::PI;
