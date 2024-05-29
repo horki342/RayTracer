@@ -1,7 +1,10 @@
+use shapes::{Point, Sphere};
+
+use crate::math::{utils, Color, Matrix, TUnit, Vector};
+
 use self::core::Drawable;
 
-use super::math::Color;
-
+use core::{Computations, Is, Material, PointLight, RAIIDrawable, Ray, II};
 use std::fs::File;
 use std::io::Write;
 use std::ops;
@@ -10,25 +13,148 @@ use std::path::PathBuf;
 pub mod core;
 pub mod shapes;
 
+/// Structure that implements Camera
+pub struct Camera {
+    pub hsize: usize, // in px
+    pub vsize: usize, // in px
+    pub fov: f64,
+
+    pub px_size: f64, // pixel size in canvas untis
+    pub hw: f64,      // half width of CV
+    pub hh: f64,      // half height of CV
+
+    /// view transformation matrix
+    pub vtm: Matrix,
+}
+
+impl Camera {
+    pub fn new(hsize: usize, vsize: usize, fov: f64) -> Self {
+        let (px_size, hw, hh) = Camera::calculate_parameters(hsize as f64, vsize as f64, fov);
+
+        Self {
+            hsize,
+            vsize,
+            fov,
+            px_size,
+            hw,
+            hh,
+            vtm: Matrix::identity(),
+        }
+    }
+
+    /// Returns a Ray from the Camera to the provided pixel position of the Canvas
+    pub fn ray_for_pixel(&self, x: usize, y: usize) -> Ray {
+        let x = x as f64;
+        let y = y as f64;
+
+        // the offset from the edge of the canvas to the pixel's cente
+        let xoffset = (x + 0.5) * self.px_size;
+        let yoffset = (y + 0.5) * self.px_size;
+
+        // the untransformed coordinates of the pixel in world space.
+        let world_x = self.hw - xoffset;
+        let world_y = self.hh - yoffset;
+
+        // calculate the inverse of the view transformation
+        let inv_view = self
+            .vtm
+            .try_inverse()
+            .expect("Cannot invert view transformation matrix in Camera.ray_for_pixel()");
+
+        // find the ray's origin and direction, and apply the view transformation
+        let pixel = &inv_view * utils::point(world_x, world_y, -1.0);
+        let origin = &inv_view * utils::point(0.0, 0.0, 0.0);
+        let direction = (pixel - origin).normalize();
+
+        Ray { origin, direction }
+    }
+
+    /// Calculates pixel size, half_width, and half_height of the Canvas
+    fn calculate_parameters(hsize: f64, vsize: f64, fov: f64) -> (f64, f64, f64) {
+        // half view
+        let hv = (fov / 2.0).tan();
+
+        let hw: f64; // half width
+        let hh: f64; // half height
+
+        let aspect_ratio = hsize / vsize;
+
+        if aspect_ratio >= 1.0 {
+            hw = hv;
+            hh = hv / aspect_ratio;
+        } else {
+            hw = hv * aspect_ratio;
+            hh = hv;
+        }
+
+        return (hw * 2.0 / hsize, hw, hh);
+    }
+
+    /// Sets a camera's view transformation
+    pub fn set_view(&mut self, from: Vector, to: Vector, up: Vector) {
+        // normalize up vector
+        let up = up.normalize();
+
+        // compute the forward, left, and true_up vectors
+        let forward = (to - from).normalize();
+        let left = utils::cross(&forward, &up);
+        let true_up = utils::cross(&left, &forward);
+
+        // compute orientation matrix
+        let orientation = utils::matrix(
+            left.x, left.y, left.z, 0.0, true_up.x, true_up.y, true_up.z, 0.0, -forward.x,
+            -forward.y, -forward.z, 0.0, 0.0, 0.0, 0.0, 1.0,
+        );
+
+        // translate orientation matrix
+        let view_matrix = orientation * (TUnit::Translate(-from.x, -from.y, -from.z).matrix());
+
+        self.vtm = view_matrix;
+    }
+}
+
 /// Structure that is used to generate images on Canvas and PPM, configure the World and Camera
 pub struct Renderer {
     pub world: World,
     cv: Canvas,
+    c: Camera,
 }
 
 impl Renderer {
     /// Creates a new empty world, and canvas with specified dimensions
-    pub fn new(width: usize, height: usize) -> Self {
-        Self {
+    pub fn new(
+        hsize: usize,
+        vsize: usize,
+        fov: f64,
+        from: Vector,
+        to: Vector,
+        up: Vector,
+        bg: Color,
+    ) -> Self {
+        let mut res = Self {
             world: World::new(),
-            cv: Canvas::new(width, height),
-        }
+            cv: Canvas::new(hsize, vsize, bg),
+            c: Camera::new(hsize, vsize, fov),
+        };
+        res.c.set_view(from, to, up);
+        res
     }
 
     /// Render objects from the world onto the canvas
     pub fn render(&mut self) {
-        for obj in self.world.objects.iter() {
-            obj.draw(&mut self.cv);
+        for y in 0..self.cv.height {
+            for x in 0..self.cv.width {
+                let ray = self.c.ray_for_pixel(x, y);
+                let color = self.world.calc(&ray, &self.cv.bg);
+                self.cv
+                    .write(x, y, color)
+                    .expect("Could not write to Canvas at Renderer.render()");
+            }
+        }
+
+        // Draw points
+        for p in self.world.points.iter() {
+            p.draw(&mut self.cv);
         }
     }
 
@@ -36,27 +162,109 @@ impl Renderer {
     pub fn generate_ppm(&self, filename: &str) {
         self.cv.to_ppm(filename);
     }
-
-    /// Resets background of the canvas
-    pub fn reset(&mut self, bg: Color) {
-        self.cv.reset(bg);
-    }
 }
 
-/// Structure that holds objects, their inner data, and overall configurations of the virtual world
+/// Structure that holds points, objects and lights, their inner data, and overall configurations of the virtual world
 pub struct World {
-    pub objects: Vec<Box<dyn Drawable>>,
+    pub points: Vec<Point>,
+    pub objects: Vec<RAIIDrawable>,
+    pub sources: Vec<Box<PointLight>>,
 }
 
 impl World {
     /// Creates an empty World
     pub fn new() -> Self {
-        Self { objects: vec![] }
+        Self {
+            points: vec![],
+            objects: vec![],
+            sources: vec![],
+        }
+    }
+
+    /// Adds a point
+    pub fn add_point(&mut self, point: Point) {
+        self.points.push(point);
     }
 
     /// Adds an object
-    pub fn add(&mut self, obj: Box<dyn Drawable>) {
+    pub fn add_obj(&mut self, obj: RAIIDrawable) {
         self.objects.push(obj);
+    }
+
+    /// Adds objects
+    pub fn add_objs(&mut self, objs: Vec<RAIIDrawable>) {
+        for obj in objs {
+            self.add_obj(obj);
+        }
+    }
+
+    /// Adds a light source
+    pub fn add_src(&mut self, src: Box<PointLight>) {
+        self.sources.push(src);
+    }
+
+    /// Interect the world's object with a given ray
+    pub fn intersect(&self, r: &Ray) -> Is {
+        let mut world_intersections: Is = Is::new();
+
+        for el in self.objects.iter() {
+            // calculate t-values
+            let ts = el.borrow().intersect(r);
+            let mut xs = Is::create(ts, el.clone());
+            world_intersections.append(&mut xs);
+        }
+
+        world_intersections.sort();
+        world_intersections
+    }
+
+    /// Shades a hit using given computations information
+    pub fn shade_hit(&self, info: Computations) -> Color {
+        // todo!("Support multiple light sources");
+        if self.sources.len() != 1 {
+            panic!("World does not support multiple sources, or no sources were provided");
+        }
+
+        return self.sources[0].shade(info.obj.borrow().get_material(), &info.p, &info.e, &info.n);
+    }
+
+    /// Calculate color in the World when the Ray is traveling
+    pub fn calc(&self, r: &Ray, bg: &Color) -> Color {
+        // todo!("Hit returns &I, so for performance purposes it can take the ownership, so that clone is not necessary.")
+        let xs = self.intersect(&r);
+        let hit = xs.hit();
+
+        match hit {
+            Some(i) => {
+                return self.shade_hit(Computations::new(i.clone(), r));
+            }
+            None => bg.clone(), // ray hit nothing.
+        }
+    }
+}
+
+impl Default for World {
+    fn default() -> Self {
+        let mut s1 = Sphere::default();
+        let s1_m: &mut Material = s1.get_material_mut();
+        s1_m.color = utils::color(0.8, 1.0, 0.6);
+        s1_m.diffuse = 0.7;
+        s1_m.specular = 0.2;
+
+        let mut s2 = Sphere::default();
+        s2.set_tunit(TUnit::Scale(0.5, 0.5, 0.5));
+
+        let light = PointLight::new(
+            utils::point(-10.0, 10.0, -10.0),
+            utils::color(1.0, 1.0, 1.0),
+        );
+
+        let mut world = World::new();
+        world.add_obj(s1.wrap());
+        world.add_obj(s2.wrap());
+        world.add_src(light.wrap_box());
+
+        world
     }
 }
 
@@ -64,15 +272,17 @@ impl World {
 pub struct Canvas {
     pub width: usize,
     pub height: usize,
+    pub bg: Color,
     grid: Vec<Color>,
 }
 
 impl Canvas {
     /// Creates an instance of Canvas
-    pub fn new(width: usize, height: usize) -> Canvas {
+    pub fn new(width: usize, height: usize, bg: Color) -> Canvas {
         Canvas {
             width,
             height,
+            bg,
             grid: vec![Color::default(); width * height],
         }
     }
@@ -85,21 +295,6 @@ impl Canvas {
 
         self[[x, y]] = val;
         Ok(())
-    }
-
-    /// Resets Canvas with a provided background color.
-    pub fn reset(&mut self, bg: Color) {
-        for y in 0..self.height {
-            for x in 0..self.width {
-                match self.write(x, y, bg) {
-                    Ok(_) => (),
-                    Err(err_text) => eprintln!(
-                        "Error occured: {}\nSo filling with the default color",
-                        err_text
-                    ),
-                }
-            }
-        }
     }
 
     /// Converts (x, y) coordinates to (z) coordinates (matrix to grid)

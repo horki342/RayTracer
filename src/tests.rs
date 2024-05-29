@@ -4,10 +4,11 @@ use super::math::utils::*;
 use super::math::{Color, Matrix, TUnit, Transformation};
 
 use super::render::Canvas;
-use crate::render::core::{Drawable, Is, Material, PointLight, Ray};
+use crate::render::core::{Computations, Drawable, Is, Material, PointLight, Ray};
 use crate::render::core::{I, II as _};
 use crate::render::shapes::Sphere;
 
+use crate::render::{Camera, World};
 use crate::{fassert, massert, transform, vassert};
 
 #[test]
@@ -93,7 +94,7 @@ fn color_operations() {
 #[test]
 fn canvas_operations() {
     // Creating a Canvas
-    let c = Canvas::new(10, 20);
+    let c = Canvas::new(10, 20, Color::black());
     assert_eq!(c.width, 10);
     assert_eq!(c.height, 20);
     for i in 0..c.height {
@@ -103,7 +104,7 @@ fn canvas_operations() {
     }
 
     // Writing pixels to the Canvas
-    let mut c = Canvas::new(10, 20);
+    let mut c = Canvas::new(10, 20, Color::black());
     let red = color(1.0, 0.0, 0.0);
     let _ = c.write(2, 3, red);
     assert_eq!(c[[2, 3]], color(1.0, 0.0, 0.0));
@@ -509,4 +510,148 @@ fn check_phong_reflection_model_for_sphere() {
     let light = PointLight::new(point(0.0, 0.0, 10.0), color(1.0, 1.0, 1.0));
     let result = light.shade(&m, &pos, &eyev, &normalv);
     assert_eq!(result, color(0.1, 0.1, 0.1));
+}
+
+#[test]
+fn scene_making_check_world_and_renderer_and_camera() {
+    // Intersect a world with a ray
+    let w = World::default();
+    let r = Ray::new(point(0.0, 0.0, -5.0), vector(0.0, 0.0, 1.0));
+    let xs = w.intersect(&r);
+    assert_eq!(xs.len(), 4);
+    assert!(xs.contains(4.0));
+    assert!(xs.contains(4.5));
+    assert!(xs.contains(5.5));
+    assert!(xs.contains(6.0));
+
+    // Precomputing the state of the intersection
+    // The hit, when an intersection occurs on the outside
+    let r = Ray::new(point(0.0, 0.0, -5.0), vector(0.0, 0.0, 1.0));
+    let shape = Sphere::default();
+    let i = I::new(4.0, shape.wrap());
+    let comps = Computations::new(i.clone(), &r);
+    assert_eq!(comps.t, i.t);
+    vassert!(comps.p, point(0.0, 0.0, -1.0));
+    vassert!(comps.e, vector(0.0, 0.0, -1.0));
+    vassert!(comps.n, vector(0.0, 0.0, -1.0));
+    assert_eq!(comps.inside, false);
+
+    // The hit, when an intersection occurs on the inside
+    let r = Ray::new(point(0.0, 0.0, 0.0), vector(0.0, 0.0, 1.0));
+    let shape = Sphere::default();
+    let i = I::new(1.0, shape.wrap());
+    let comps = Computations::new(i, &r);
+    vassert!(comps.p, point(0.0, 0.0, 1.0));
+    vassert!(comps.e, vector(0.0, 0.0, -1.0));
+    assert_eq!(comps.inside, true);
+    // normal must be inverted
+    vassert!(comps.n, vector(0.0, 0.0, -1.0));
+
+    // Shading an intersection
+    let w = World::default();
+    let r = Ray::new(point(0.0, 0.0, -5.0), vector(0.0, 0.0, 1.0));
+    let shape = w.objects[0].clone();
+    let i = I::new(4.0, shape);
+    let comps = Computations::new(i, &r);
+    let c = w.shade_hit(comps);
+    assert_eq!(c, color(0.38066, 0.47583, 0.2855));
+
+    // Shading an intersection from the inside
+    let mut w = World::default();
+    w.sources[0] = PointLight::new(point(0.0, 0.25, 0.0), color(1.0, 1.0, 1.0)).wrap_box();
+    let r = Ray::new(point(0.0, 0.0, 0.0), vector(0.0, 0.0, 1.0));
+    let shape = w.objects[1].clone();
+    let i = I::new(0.5, shape);
+    let comps = Computations::new(i, &r);
+    let c = w.shade_hit(comps);
+    assert_eq!(c, color(0.90498, 0.90498, 0.90498));
+
+    // The color when a ray misses
+    let w = World::default();
+    let r = Ray::new(point(0.0, 0.0, -5.0), vector(0.0, 1.0, 0.0));
+    assert_eq!(w.calc(&r, &Color::black()), color(0.0, 0.0, 0.0));
+
+    // The color when a ray hits
+    let w = World::default();
+    let r = Ray::new(point(0.0, 0.0, -5.0), vector(0.0, 0.0, 1.0));
+    assert_eq!(w.calc(&r, &Color::black()), color(0.38066, 0.47583, 0.2855));
+
+    // The color with an intersection behind the ray
+    let w = World::default();
+    let outer = w.objects[0].clone();
+    outer.borrow_mut().get_material_mut().ambient = 1.0;
+    let inner = w.objects[1].clone();
+    inner.borrow_mut().get_material_mut().ambient = 1.0;
+    let r = Ray::new(point(0.0, 0.0, 0.75), vector(0.0, 0.0, -1.0));
+    assert_eq!(
+        w.calc(&r, &Color::black()),
+        inner.borrow_mut().get_material_mut().color
+    );
+
+    // The transfomration matrix for the default orientation
+    let from = point(0.0, 0.0, 0.0);
+    let to = point(0.0, 0.0, -1.0);
+    let up = vector(0.0, 1.0, 0.0);
+    let mut t = Camera::new(0, 0, 0.0);
+    t.set_view(from, to, up);
+    massert!(t.vtm, Matrix::identity());
+
+    // A view transformation matrix looking in positive Z direction
+    let from = point(0.0, 0.0, 0.0);
+    let to = point(0.0, 0.0, 1.0);
+    let up = vector(0.0, 1.0, 0.0);
+    let mut t = Camera::new(0, 0, 0.0);
+    t.set_view(from, to, up);
+    massert!(t.vtm, TUnit::Scale(-1.0, 1.0, -1.0).matrix());
+
+    // The view transformation moves the world
+    let from = point(0.0, 0.0, 8.0);
+    let to = point(0.0, 0.0, 0.0);
+    let up = vector(0.0, 1.0, 0.0);
+    let mut t = Camera::new(0, 0, 0.0);
+    t.set_view(from, to, up);
+    massert!(t.vtm, TUnit::Translate(0.0, 0.0, -8.0).matrix());
+
+    // An arbitrary view transformation
+    let from = point(1.0, 3.0, 2.0);
+    let to = point(4.0, -2.0, 8.0);
+    let up = vector(1.0, 1.0, 0.0);
+    let mut t = Camera::new(0, 0, 0.0);
+    t.set_view(from, to, up);
+    massert!(
+        t.vtm,
+        matrix(
+            -0.50709, 0.50709, 0.67612, -2.36643, 0.76772, 0.60609, 0.12122, -2.82843, -0.35857,
+            0.59761, -0.71714, 0.00000, 0.00000, 0.00000, 0.00000, 1.00000
+        )
+    );
+
+    // The pixel size for a horizontal canvas
+    let c = Camera::new(200, 125, PI / 2.0);
+    fassert!(c.px_size, 0.01);
+
+    // The pixel size for a vertical canvas
+    let c = Camera::new(125, 200, PI / 2.0);
+    fassert!(c.px_size, 0.01);
+
+    // Constructing a ray through the center of the canvas
+    let c = Camera::new(201, 101, PI / 2.0);
+    let r = c.ray_for_pixel(100, 50);
+    vassert!(r.origin, point(0.0, 0.0, 0.0));
+    vassert!(r.direction, vector(0.0, 0.0, -1.0));
+
+    // Constructing a ray through a corner of the canvas
+    let r = c.ray_for_pixel(0, 0);
+    vassert!(r.origin, point(0.0, 0.0, 0.0));
+    vassert!(r.direction, vector(0.66519, 0.33259, -0.66851));
+
+    // Constructing a ray when the camera is transformed
+    let mut c = Camera::new(201, 101, PI / 2.0);
+    c.vtm = *transform!(TUnit::Translate(0.0, -2.0, 5.0), TUnit::RotateY(PI / 4.0)).matrix();
+    let r = c.ray_for_pixel(100, 50);
+    vassert!(r.origin, point(0.0, 2.0, -5.0));
+    vassert!(
+        r.direction,
+        vector(2_f64.sqrt() / 2.0, 0.0, -2_f64.sqrt() / 2.0)
+    );
 }

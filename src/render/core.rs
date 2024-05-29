@@ -6,7 +6,6 @@ use std::fmt::Debug;
 use std::rc::Rc;
 use std::{cell::RefCell, ops};
 
-use super::Canvas;
 use crate::{
     math::{utils, Color, Matrix, TUnit, Transformation, Vector},
     transform,
@@ -59,7 +58,10 @@ pub struct Ray {
 impl Ray {
     /// Creates a new Ray with specified origin and direction
     pub fn new(origin: Vector, direction: Vector) -> Self {
-        Self { origin, direction }
+        Self {
+            origin,
+            direction: direction,
+        }
     }
 
     /// Get position along the Ray's direction at the given t-value
@@ -77,13 +79,56 @@ impl ops::Mul<&Ray> for &Matrix {
     }
 }
 
+/// Contains all the PRM-necessary information, including:
+/// t: t-value of the intersection,
+/// obj: the object of interest (which was intersected),
+/// p: the point of intersection on the object,
+/// e: eye vector at the point,
+/// n: normal at the point,
+/// inside: indicates whether the intersection took place inside the object,
+/// ALERT: Computations takes ownership over Intersection's data
+pub struct Computations {
+    pub t: f64,
+    pub obj: RAIIDrawable,
+    pub p: Vector,
+    pub e: Vector,
+    pub n: Vector,
+    pub inside: bool,
+}
+
+impl Computations {
+    /// Creates Computations from the I (Intersection) object, and the used ray
+    pub fn new(i: I, r: &Ray) -> Self {
+        let p = r.pos(i.t);
+        let e = -r.direction.clone();
+        let mut n = i.obj.borrow().normal(&p);
+        let inside: bool;
+
+        if utils::dot(&n, &e) < 0.0 {
+            inside = true;
+            n = -n;
+        } else {
+            inside = false;
+        }
+
+        Self {
+            t: i.t,
+            obj: i.obj,
+            p,
+            e,
+            n,
+            inside,
+        }
+    }
+}
+
 /// Data strucutre that represents Intersection (I) of a ray and object
 /// t: t-value of Intersection
 /// obj: reference to the Drawable Shape
 #[derive(Debug, Clone)]
 pub struct I {
     pub t: f64,
-    pub obj: Rc<RefCell<dyn Drawable>>,
+    pub obj: RAIIDrawable,
 }
 
 impl PartialEq for I {
@@ -94,7 +139,7 @@ impl PartialEq for I {
 
 impl I {
     /// Creates a new Intersection
-    pub fn new(t: f64, obj: Rc<RefCell<dyn Drawable>>) -> Self {
+    pub fn new(t: f64, obj: RAIIDrawable) -> Self {
         Self { t, obj }
     }
 }
@@ -134,7 +179,10 @@ pub trait II {
     fn hit(&self) -> Option<&I>;
 
     /// Creates a sorted Intersections object from Tvalues, relating them to the given object (Rc<RefCell<Shape>>)
-    fn create(ts: Tvalues, obj: Rc<RefCell<dyn Drawable>>) -> Self;
+    fn create_sorted(ts: Tvalues, obj: RAIIDrawable) -> Self;
+
+    /// Creates a Intersections object from Tvalues, relating them to the given object (Rc<RefCell<Shape>>)
+    fn create(ts: Tvalues, obj: RAIIDrawable) -> Self;
 
     /// Combines Intersection (I) into one Intersections object, and sorts them
     fn combine(intersections: &[I]) -> Self;
@@ -167,12 +215,17 @@ impl II for Is {
         return None;
     }
 
-    fn create(ts: Tvalues, obj: Rc<RefCell<dyn Drawable>>) -> Self {
+    fn create_sorted(ts: Tvalues, obj: RAIIDrawable) -> Self {
+        let mut res = Self::create(ts, obj);
+        res.sort();
+        res
+    }
+
+    fn create(ts: Tvalues, obj: RAIIDrawable) -> Self {
         let mut res = Is::new();
         for t in ts {
             res.push(I::new(t, obj.clone()));
         }
-        res.sort();
         res
     }
 
@@ -185,12 +238,6 @@ impl II for Is {
 
 /// A trait that implements methods used to draw Shape on a Canvas.
 pub trait Drawable: Debug {
-    /// Draw the object to the Canvas
-    /// cv: mutable reference to the Canvas object
-    fn draw(&self, _cv: &mut Canvas) {
-        panic!("This Drawable object has no implemented draw()");
-    }
-
     /// Explicitely set the transformation to the Drawable object (Shape)
     /// t: owned Transformation object
     fn set_transform(&mut self, _t: Transformation) {
@@ -272,22 +319,17 @@ pub trait Drawable: Debug {
         panic!("This Drawable object has no implemented local_intersect()");
     }
 
-    /// Wraps Drawable object into Rc<RefCell<dyn Drawable>>
-    fn wrap(self) -> Rc<RefCell<dyn Drawable>>
+    /// Wraps Drawable object into RAIIDrawable
+    fn wrap(self) -> RAIIDrawable
     where
         Self: Sized + 'static,
     {
         Rc::new(RefCell::new(self))
     }
-
-    /// Wraps Drawable object into Box<dyn Drawable>
-    fn wrap_box(self) -> Box<dyn Drawable>
-    where
-        Self: Sized + 'static,
-    {
-        Box::new(self)
-    }
 }
+
+/// RAII Drawable objects
+pub type RAIIDrawable = Rc<RefCell<dyn Drawable>>;
 
 /// An abstract data structure that represents a shape drawable onto a Canvas
 #[derive(Debug, Clone, Default)]
@@ -397,5 +439,10 @@ impl PointLight {
 
         let res = ambient + specular + diffuse;
         return res;
+    }
+
+    /// Wraps PointLight in Box<PointLight>
+    pub fn wrap_box(self) -> Box<Self> {
+        Box::new(self)
     }
 }

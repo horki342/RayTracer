@@ -38,7 +38,7 @@ macro_rules! fassert {
 /// Utility that expand massert!(Matrix, Matrix) to assert!(meq(&Matrix, &Matrix))
 macro_rules! massert {
     ($m1:expr, $m2:expr) => {
-        assert!(crate::math::utils::meq(&$m1, &$m2));
+        assert!(crate::math::utils::meq(&$m1, &$m2))
     };
 }
 

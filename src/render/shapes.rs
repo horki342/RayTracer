@@ -31,11 +31,6 @@ impl Default for Sphere {
 }
 
 impl Drawable for Sphere {
-    fn draw(&self, cv: &mut super::Canvas) {
-        self.shape.draw(cv);
-        todo!("Implement draw() for Sphere");
-    }
-
     fn set_transform(&mut self, t: math::Transformation) {
         self.shape.set_transform(t)
     }
@@ -110,10 +105,9 @@ impl Point {
         res.get_material_mut().change_color(col);
         res
     }
-}
 
-impl Drawable for Point {
-    fn draw(&self, cv: &mut super::Canvas) {
+    /// Draws a point to the Canvas
+    pub fn draw(&self, cv: &mut super::Canvas) {
         // transformed point
         let trp = self.get_transform() * self.pos;
         let x = trp.x.round() as usize;
@@ -122,7 +116,9 @@ impl Drawable for Point {
         cv.write(x, y, self.get_material().color)
             .expect("Could not draw the Point");
     }
+}
 
+impl Drawable for Point {
     fn set_transform(&mut self, t: math::Transformation) {
         self.shape.set_transform(t);
     }
@@ -145,13 +141,6 @@ impl Drawable for Point {
 
     fn get_material_mut(&mut self) -> &mut Material {
         self.shape.get_material_mut()
-    }
-
-    fn wrap(self) -> std::rc::Rc<std::cell::RefCell<dyn Drawable>>
-    where
-        Self: Sized + 'static,
-    {
-        std::rc::Rc::new(std::cell::RefCell::new(self))
     }
 }
 
