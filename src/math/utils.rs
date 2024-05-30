@@ -1,7 +1,7 @@
 use super::{Color, Matrix, Vector};
 use nalgebra::Vector3;
 
-const EPSILON: f64 = 0.0001;
+pub const EPSILON: f64 = 0.0001;
 
 /// Compares two float (f64) numbers with EPSILON-precision
 pub fn feq(a: f64, b: f64) -> bool {

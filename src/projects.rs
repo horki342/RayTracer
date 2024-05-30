@@ -178,8 +178,8 @@ pub fn draw_spheres() {
     let light = PointLight::new(point(-10.0, 10.0, -10.0), color(1.0, 1.0, 1.0));
 
     let mut app = Renderer::new(
-        3000,
-        1500,
+        1000,
+        500,
         PI / 3.0,
         point(0.0, 1.5, -5.0),
         point(0.0, 1.0, 0.0),
@@ -199,5 +199,5 @@ pub fn draw_spheres() {
     app.world.add_src(light.wrap_box());
 
     app.render();
-    app.generate_ppm("spheres.ppm");
+    app.generate_ppm("spheres_shadows.ppm");
 }

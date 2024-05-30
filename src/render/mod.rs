@@ -218,6 +218,37 @@ impl World {
         world_intersections
     }
 
+    /// Checks whether a point is shadowed
+    /// p: point that is being checked
+    pub fn is_shadowed(&self, p: &Vector) -> bool {
+        // todo!("Support multiple light sources")
+        if self.sources.len() != 1 {
+            panic!("World does not support multiple sources, or no sources were provided");
+        }
+
+        // calculate the distance from the point p to the light source
+        let mut v = self.sources[0].pos - p;
+        let dist = v.magnitude();
+
+        // get the ray from the point p to the light source
+        v.normalize_mut();
+        let r = Ray::new(p.clone(), v);
+
+        // intersect world with the ray, and identify hit
+        let xs = self.intersect(&r);
+        let hit = xs.hit();
+
+        match hit {
+            Some(i) => {
+                if i.t - dist < -crate::math::utils::EPSILON / 2.0 {
+                    return true;
+                }
+                return false;
+            }
+            None => return false,
+        }
+    }
+
     /// Shades a hit using given computations information
     pub fn shade_hit(&self, info: Computations) -> Color {
         // todo!("Support multiple light sources");
@@ -225,7 +256,16 @@ impl World {
             panic!("World does not support multiple sources, or no sources were provided");
         }
 
-        return self.sources[0].shade(info.obj.borrow().get_material(), &info.p, &info.e, &info.n);
+        // determine whether the point is shadowed
+        let shadowed: bool = self.is_shadowed(&info.over_p);
+
+        return self.sources[0].shade(
+            info.obj.borrow().get_material(),
+            &info.p,
+            &info.e,
+            &info.n,
+            shadowed,
+        );
     }
 
     /// Calculate color in the World when the Ray is traveling

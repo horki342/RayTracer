@@ -83,6 +83,7 @@ impl ops::Mul<&Ray> for &Matrix {
 /// t: t-value of the intersection,
 /// obj: the object of interest (which was intersected),
 /// p: the point of intersection on the object,
+/// over_p: moved p in the dir of normal to solve the acne problem
 /// e: eye vector at the point,
 /// n: normal at the point,
 /// inside: indicates whether the intersection took place inside the object,
@@ -91,6 +92,7 @@ pub struct Computations {
     pub t: f64,
     pub obj: RAIIDrawable,
     pub p: Vector,
+    pub over_p: Vector,
     pub e: Vector,
     pub n: Vector,
     pub inside: bool,
@@ -111,10 +113,14 @@ impl Computations {
             inside = false;
         }
 
+        // calculate overpoint
+        let over_p = p + crate::math::utils::EPSILON * n;
+
         Self {
             t: i.t,
             obj: i.obj,
             p,
+            over_p,
             e,
             n,
             inside,
@@ -371,7 +377,7 @@ impl Drawable for Shape {
 /// pos: world-coordinates position of the point light source
 /// int: intensity of the light source (measured in [Color])
 pub struct PointLight {
-    pos: Vector,
+    pub pos: Vector,
     int: Color,
 }
 
@@ -397,7 +403,8 @@ impl PointLight {
     /// p - The position of the point;
     /// e - Eye vector of the camera;
     /// n - Normal to the object at the world pixel;
-    pub fn shade(&self, m: &Material, p: &Vector, e: &Vector, n: &Vector) -> Color {
+    /// shadowed - Switch whether the point is shadowed
+    pub fn shade(&self, m: &Material, p: &Vector, e: &Vector, n: &Vector, shadowed: bool) -> Color {
         // combine the surface color with the light's intensity
         let eff_col = self.int * m.color; // effective color
 
@@ -406,6 +413,11 @@ impl PointLight {
 
         // compute the ambient contribution
         let ambient = eff_col * m.ambient;
+
+        // if point is shadowed, only the ambient component is visible
+        if shadowed {
+            return ambient;
+        }
 
         let diffuse: Color;
         let specular: Color;
