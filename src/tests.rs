@@ -4,9 +4,9 @@ use super::math::utils::*;
 use super::math::{Color, Matrix, TUnit, Transformation};
 
 use super::render::Canvas;
-use crate::render::core::{Computations, Drawable, Is, Material, PointLight, Ray};
+use crate::render::core::{Computations, Drawable, Is, Material, PointLight, Ray, II};
 use crate::render::core::{I, II as _};
-use crate::render::shapes::{Point, Sphere};
+use crate::render::shapes::{Plane, Point, Sphere};
 
 use crate::render::{Camera, World};
 use crate::{fassert, massert, transform, vassert};
@@ -703,4 +703,32 @@ fn test_shadow_casting() {
     let comps = Computations::new(i, &r);
     let c = w.shade_hit(comps);
     assert_eq!(c, color(0.1, 0.1, 0.1));
+}
+
+#[test]
+fn check_planes() {
+    // The normal of a plane is constant everywhere
+    let p = Plane::default();
+    let n1 = p.local_normal(&point(0.0, 0.0, 0.0));
+    let n2 = p.local_normal(&point(10.0, 0.0, -10.0));
+    let n3 = p.local_normal(&point(-5.0, 0.0, 150.0));
+    vassert!(n1, vector(0.0, 1.0, 0.0));
+    vassert!(n2, vector(0.0, 1.0, 0.0));
+    vassert!(n3, vector(0.0, 1.0, 0.0));
+
+    // Intersect with a ray parallel to the plane
+    let r = Ray::new(point(0.0, 10.0, 0.0), vector(0.0, 0.0, 1.0));
+    let i = p.local_intersect(&r);
+    assert!(i.len() == 0); 
+    
+    // Intersect with a coplanar ray
+    let r = Ray::new(point(0.0, 0.0, 0.0), vector(0.0, 0.0, 1.0));
+    let i = p.local_intersect(&r);
+    assert!(i.len() == 0);
+
+    // A ray intersecting a plane from above
+    let r = Ray::new(point(0.0, 1.0, 0.0), vector(0.0, -1.0, 0.0));
+    let i = p.local_intersect(&r);
+    assert_eq!(i.len(), 1);
+    assert!(i.contains(&1.0));
 }

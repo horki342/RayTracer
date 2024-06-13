@@ -246,35 +246,35 @@ impl II for Is {
 pub trait Drawable: Debug {
     /// Explicitely set the transformation to the Drawable object (Shape)
     /// t: owned Transformation object
-    fn set_transform(&mut self, _t: Transformation) {
-        panic!("This Drawable object has no implemented set_transform()");
+    fn set_transform(&mut self, t: Transformation) {
+        self.get_shape_mut().set_transform(t);
     }
 
     /// Explicitely set a singlular transformation (TUnit) to a Drawable object (Shape)
     /// t_unit: owned TUnit object
-    fn set_tunit(&mut self, _t_unit: TUnit) {
-        panic!("This Drawable object has no implemented set_tunit()");
+    fn set_tunit(&mut self, t_unit: TUnit) {
+        self.get_shape_mut().set_tunit(t_unit); 
     }
 
     /// Explicitely set the material to the Drawable object (Shape)
     /// m: owned Material object
-    fn set_material(&mut self, _m: Material) {
-        panic!("This Drawable object has no implemented set_material()");
+    fn set_material(&mut self, m: Material) {
+        self.get_shape_mut().set_material(m);
     }
 
     /// Returns a reference to the Transformation object of the Drawable object (Shape)
     fn get_transform(&self) -> &Transformation {
-        panic!("This Drawable object has no implemented get_transform()");
+        self.get_shape().get_transform()
     }
 
     /// Returns a reference to the Material object of the Drawable object (Shape)
     fn get_material(&self) -> &Material {
-        panic!("This Drawable object has no implemented get_material()");
+        self.get_shape().get_material()
     }
 
     /// Returns a mutable reference to the Material object of the Drawable object (Shape)
     fn get_material_mut(&mut self) -> &mut Material {
-        panic!("This Drawable object has no implemented get_material_mut()");
+        self.get_shape_mut().get_material_mut()
     }
 
     /// Returns a normal vector at a given point on the Drawable object (Shape)
@@ -301,9 +301,7 @@ pub trait Drawable: Debug {
 
     /// Returns a local normal vector at a given point on the Drawable object (Shape)
     /// obj_p: reference to an object radius-vector of the point (Vector)
-    fn local_normal(&self, _obj_p: &Vector) -> Vector {
-        panic!("This Drawable object has no implemented local_normal()");
-    }
+    fn local_normal(&self, _obj_p: &Vector) -> Vector;
 
     /// (World Space) Returns a SORTED vector of t-values where a given Ray intersects the Drawable object (Shape)
     /// world_r: reference to a world-coordinates Ray which Is are seeked (&Ray)
@@ -321,9 +319,13 @@ pub trait Drawable: Debug {
 
     /// (Object Space) Returns a SORTED vector of t-values where a given Ray intersects the Drawable object (Shape)
     /// obj_r: reference to an object_coordinates Ray which Is are seeked (&Ray)
-    fn local_intersect(&self, _obj_r: &Ray) -> Tvalues {
-        panic!("This Drawable object has no implemented local_intersect()");
-    }
+    fn local_intersect(&self, _obj_r: &Ray) -> Tvalues;
+
+    /// Gets a mutable reference to the Shape field of the object
+    fn get_shape_mut(&mut self) -> &mut Shape;
+    
+    /// Gets a reference to the Shape field of the object
+    fn get_shape(&self) -> &Shape;
 
     /// Wraps Drawable object into RAIIDrawable
     fn wrap(self) -> RAIIDrawable
@@ -370,6 +372,22 @@ impl Drawable for Shape {
 
     fn get_material_mut(&mut self) -> &mut Material {
         return &mut self.m;
+    }
+
+    fn get_shape(&self) -> &Shape {
+        self
+    }
+
+    fn get_shape_mut(&mut self) -> &mut Shape {
+        self
+    }
+
+    fn local_normal(&self, _obj_p: &Vector) -> Vector {
+        panic!("Shape has no local_normal")
+    }
+
+    fn local_intersect(&self, _obj_r: &Ray) -> Tvalues {
+        panic!("Shape has no local_intersect");
     }
 }
 

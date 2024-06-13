@@ -4,7 +4,7 @@
 
 use super::core::*;
 
-use crate::math::{utils, Vector};
+use crate::math::{utils, Vector, utils::EPSILON};
 use crate::{math, tvalues};
 
 // begin Sphere ===========================================================================================
@@ -31,18 +31,6 @@ impl Default for Sphere {
 }
 
 impl Drawable for Sphere {
-    fn set_transform(&mut self, t: math::Transformation) {
-        self.shape.set_transform(t)
-    }
-
-    fn set_tunit(&mut self, t_unit: math::TUnit) {
-        self.shape.set_tunit(t_unit)
-    }
-
-    fn set_material(&mut self, m: Material) {
-        self.shape.set_material(m)
-    }
-
     fn local_normal(&self, obj_p: &Vector) -> Vector {
         let obj_n = obj_p - self.c;
         return obj_n;
@@ -69,17 +57,13 @@ impl Drawable for Sphere {
         // otherwise return an empty vector
         tvalues!()
     }
-
-    fn get_transform(&self) -> &math::Transformation {
-        self.shape.get_transform()
+    
+    fn get_shape(&self) -> &Shape {
+        &self.shape
     }
 
-    fn get_material(&self) -> &Material {
-        self.shape.get_material()
-    }
-
-    fn get_material_mut(&mut self) -> &mut Material {
-        self.shape.get_material_mut()
+    fn get_shape_mut(&mut self) -> &mut Shape {
+        &mut self.shape
     }
 }
 
@@ -119,29 +103,64 @@ impl Point {
 }
 
 impl Drawable for Point {
-    fn set_transform(&mut self, t: math::Transformation) {
-        self.shape.set_transform(t);
+    fn get_shape(&self) -> &Shape {
+        &self.shape
     }
 
-    fn set_tunit(&mut self, t_unit: math::TUnit) {
-        self.shape.set_tunit(t_unit);
+    fn get_shape_mut(&mut self) -> &mut Shape {
+        &mut self.shape
     }
 
-    fn set_material(&mut self, m: Material) {
-        self.shape.set_material(m);
+    fn local_normal(&self, _obj_p: &Vector) -> Vector {
+        panic!("Point does not imlepement local_normal")
     }
 
-    fn get_transform(&self) -> &math::Transformation {
-        self.shape.get_transform()
-    }
-
-    fn get_material(&self) -> &Material {
-        self.shape.get_material()
-    }
-
-    fn get_material_mut(&mut self) -> &mut Material {
-        self.shape.get_material_mut()
+    fn local_intersect(&self, _obj_r: &Ray) -> Tvalues {
+        panic!("Point does not implement local_intersect")
     }
 }
 
 // end Point ===========================================================================================
+
+// begin Plane ===========================================================================================
+
+/// Plane that (by default) extends in x- and z-directions.
+#[derive(Debug, Clone)]
+pub struct Plane {
+    shape: Shape,
+}
+
+impl Default for Plane {
+    fn default() -> Self {
+        Plane {
+            shape: Shape::default()
+        }
+    }
+}
+
+impl Drawable for Plane {
+    fn get_shape_mut(&mut self) -> &mut Shape {
+        &mut self.shape
+    }
+
+    fn get_shape(&self) -> &Shape {
+        &self.shape
+    }
+
+    /// Constant normal for a plane
+    fn local_normal(&self, _obj_p: &Vector) -> Vector {
+        utils::vector(0.0, 1.0, 0.0)
+    }
+
+    fn local_intersect(&self, obj_r: &Ray) -> Tvalues {
+        // if ray is parallel to plane, no intersect 
+        if obj_r.direction.y.abs() < EPSILON {
+            return Tvalues::new();
+        }
+
+        let t = -obj_r.origin.y / obj_r.direction.y;
+        return vec![t] as Tvalues;
+    }
+ }
+
+// end Plane ===========================================================================================

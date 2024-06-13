@@ -3,7 +3,7 @@ use ray_tracer::math::*;
 use ray_tracer::render::core::PointLight;
 use ray_tracer::*;
 use render::core::Drawable;
-use render::shapes::Sphere;
+use render::shapes::{Plane, Sphere};
 use render::Renderer;
 
 use std::f64::consts::PI;
@@ -200,4 +200,59 @@ pub fn draw_spheres() {
 
     app.render();
     app.generate_ppm("spheres_shadows.ppm");
+}
+
+
+pub fn draw_spheres_and_planes() {
+    let mut floor = Plane::default();
+    floor.get_material_mut().change_color(color(1.0, 0.9, 0.9));
+    floor.get_material_mut().specular = 0.0;
+
+    let mut middle = Sphere::default();
+    middle.set_tunit(TUnit::Translate(-0.5, 1.0, 0.5));
+    middle.get_material_mut().color = color(0.1, 1.0, 0.5);
+    middle.get_material_mut().diffuse = 0.7;
+    middle.get_material_mut().specular = 0.3;
+
+    let mut right = Sphere::default();
+    right.set_transform(transform!(
+        TUnit::Scale(0.5, 0.5, 0.5),
+        TUnit::Translate(1.5, 0.5, -0.5)
+    ));
+    right.get_material_mut().color = color(0.5, 1.0, 0.1);
+    right.get_material_mut().diffuse = 0.7;
+    right.get_material_mut().specular = 0.3;
+
+    let mut left = Sphere::default();
+    left.set_transform(transform!(
+        TUnit::Scale(0.33, 0.33, 0.33),
+        TUnit::Translate(-1.5, 0.33, -0.75)
+    ));
+    left.get_material_mut().color = color(1.0, 0.8, 0.1);
+    left.get_material_mut().diffuse = 0.7;
+    left.get_material_mut().specular = 0.3;
+
+    let light = PointLight::new(point(-10.0, 10.0, -10.0), color(1.0, 1.0, 1.0));
+
+    let mut app = Renderer::new(
+        1000,
+        500,
+        PI / 3.0,
+        point(0.0, 1.5, -5.0),
+        point(0.0, 1.0, 0.0),
+        vector(0.0, 1.0, 0.0),
+        Color::black(),
+    );
+
+    let objects = vec![
+        floor.wrap(),
+        middle.wrap(),
+        right.wrap(),
+        left.wrap(),
+    ];
+    app.world.add_objs(objects);
+    app.world.add_src(light.wrap_box());
+
+    app.render();
+    app.generate_ppm("planes.ppm");
 }
