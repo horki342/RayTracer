@@ -2,7 +2,7 @@ use ray_tracer::math::utils::*;
 use ray_tracer::math::*;
 use ray_tracer::render::core::PointLight;
 use ray_tracer::*;
-use render::core::Drawable;
+use render::core::{Drawable, Pattern, PatternList};
 use render::shapes::{Plane, Sphere};
 use render::Renderer;
 
@@ -204,15 +204,19 @@ pub fn draw_spheres() {
 
 
 pub fn draw_spheres_and_planes() {
+    let pattern = Pattern::default(PatternList::StripePattern);
+
     let mut floor = Plane::default();
     floor.get_material_mut().change_color(color(1.0, 0.9, 0.9));
     floor.get_material_mut().specular = 0.0;
+    floor.set_pattern(pattern.clone());
 
     let mut middle = Sphere::default();
     middle.set_tunit(TUnit::Translate(-0.5, 1.0, 0.5));
     middle.get_material_mut().color = color(0.1, 1.0, 0.5);
     middle.get_material_mut().diffuse = 0.7;
     middle.get_material_mut().specular = 0.3;
+    middle.set_pattern(pattern.clone());
 
     let mut right = Sphere::default();
     right.set_transform(transform!(
@@ -222,6 +226,7 @@ pub fn draw_spheres_and_planes() {
     right.get_material_mut().color = color(0.5, 1.0, 0.1);
     right.get_material_mut().diffuse = 0.7;
     right.get_material_mut().specular = 0.3;
+    right.set_pattern(pattern.clone());
 
     let mut left = Sphere::default();
     left.set_transform(transform!(
@@ -231,12 +236,13 @@ pub fn draw_spheres_and_planes() {
     left.get_material_mut().color = color(1.0, 0.8, 0.1);
     left.get_material_mut().diffuse = 0.7;
     left.get_material_mut().specular = 0.3;
+    left.set_pattern(pattern);
 
     let light = PointLight::new(point(-10.0, 10.0, -10.0), color(1.0, 1.0, 1.0));
 
     let mut app = Renderer::new(
-        1000,
         500,
+        250,
         PI / 3.0,
         point(0.0, 1.5, -5.0),
         point(0.0, 1.0, 0.0),
@@ -254,5 +260,74 @@ pub fn draw_spheres_and_planes() {
     app.world.add_src(light.wrap_box());
 
     app.render();
-    app.generate_ppm("planes.ppm");
+    app.generate_ppm("planes_with_strapes.ppm");
+}
+
+pub fn draw_patterns() {
+    let mut floor = Plane::default();
+    floor.get_material_mut().change_color(color(1.0, 0.9, 0.9));
+    floor.get_material_mut().specular = 0.0;
+    let mut floor_pattern = Pattern::default(PatternList::StripePattern);
+    floor_pattern.set_colors(color(0.83, 0.83, 0.83), color(0.9, 1.0, 1.0));
+    floor.set_pattern(floor_pattern);
+
+    let mut middle = Sphere::default();
+    middle.set_tunit(TUnit::Translate(-0.5, 1.0, 0.5));
+    middle.get_material_mut().color = color(0.1, 1.0, 0.5);
+    middle.get_material_mut().diffuse = 0.7;
+    middle.get_material_mut().specular = 0.3;
+    let mut middle_pattern = Pattern::default(PatternList::GradientPattern);
+    middle_pattern.set_colors(color(0.0, 0.0, 1.0), color(0.5, 0.0, 0.5));
+    middle_pattern.add_tunit(TUnit::Scale(2.0, 1.0, 1.0));
+    middle.set_pattern(middle_pattern);
+
+    let mut right = Sphere::default();
+    right.set_transform(transform!(
+        TUnit::Scale(0.5, 0.5, 0.5),
+        TUnit::Translate(1.5, 0.5, -0.5)
+    ));
+    right.get_material_mut().color = color(0.5, 1.0, 0.1);
+    right.get_material_mut().diffuse = 0.7;
+    right.get_material_mut().specular = 0.3;
+    let mut right_pattern = Pattern::default(PatternList::GradientPattern);
+    right_pattern.set_colors(color(1.0, 0.0, 0.0), color(1.0, 0.65, 0.0));
+    right_pattern.add_tunit(TUnit::Scale(2.0, 1.0, 1.0));
+    right.set_pattern(right_pattern);
+
+    let mut left = Sphere::default();
+    left.set_transform(transform!(
+        TUnit::Scale(0.33, 0.33, 0.33),
+        TUnit::Translate(-1.5, 0.33, -0.75)
+    ));
+    left.get_material_mut().color = color(1.0, 0.8, 0.1);
+    left.get_material_mut().diffuse = 0.7;
+    left.get_material_mut().specular = 0.3;
+    let mut left_pattern = Pattern::default(PatternList::GradientPattern);
+    left_pattern.set_colors(color(0.0, 0.5, 0.0), color(1.0, 1.0, 0.0));
+    left_pattern.add_tunit(TUnit::Scale(2.0, 1.0, 1.0));
+    left.set_pattern(left_pattern);
+
+    let light = PointLight::new(point(-10.0, 10.0, -10.0), color(1.0, 1.0, 1.0));
+
+    let mut app = Renderer::new(
+        300,
+        150,
+        PI / 3.0,
+        point(0.0, 1.5, -5.0),
+        point(0.0, 1.0, 0.0),
+        vector(0.0, 1.0, 0.0),
+        Color::black(),
+    );
+
+    let objects = vec![
+        floor.wrap(),
+        middle.wrap(),
+        right.wrap(),
+        left.wrap(),
+    ];
+    app.world.add_objs(objects);
+    app.world.add_src(light.wrap_box());
+
+    app.render();
+    app.generate_ppm("patterns.ppm");
 }

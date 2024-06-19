@@ -1,5 +1,5 @@
 use nalgebra as na;
-use std::ops;
+use std::{ops, rc::Rc};
 
 use super::render::core::Ray;
 
@@ -52,6 +52,10 @@ impl Color {
 
     pub fn black() -> Self {
         utils::color(0.0, 0.0, 0.0)
+    }
+
+    pub fn white() -> Self {
+        utils::color(1.0, 1.0, 1.0)
     }
 }
 impl Default for Color {
@@ -115,6 +119,56 @@ impl ops::Mul<Color> for Color {
 
     /// Schur-product of two colors
     fn mul(self, rhs: Color) -> Self::Output {
+        utils::color(self.r * rhs.r, self.g * rhs.g, self.b * rhs.b)
+    }
+}
+
+
+impl ops::Add<&Color> for &Color {
+    type Output = Color;
+
+    /// Adds two colors component-wisely
+    fn add(self, rhs: &Color) -> Self::Output {
+        utils::color(self.r + rhs.r, self.g + rhs.g, self.b + rhs.b)
+    }
+}
+impl ops::Sub<&Color> for &Color {
+    type Output = Color;
+
+    /// Subtracts two colors component-wisely
+    fn sub(self, rhs: &Color) -> Self::Output {
+        utils::color(self.r - rhs.r, self.g - rhs.g, self.b - rhs.b)
+    }
+}
+impl ops::Mul<f64> for &Color {
+    type Output = Color;
+
+    /// Multiplies a Color with a float number
+    fn mul(self, rhs: f64) -> Self::Output {
+        utils::color(self.r * rhs, self.g * rhs, self.b * rhs)
+    }
+}
+impl ops::Mul<&Color> for f64 {
+    type Output = Color;
+
+    /// Multiplies a Color with a float number
+    fn mul(self, rhs: &Color) -> Self::Output {
+        utils::color(self * rhs.r, self * rhs.g, self * rhs.b)
+    }
+}
+impl ops::Div<f64> for &Color {
+    type Output = Color;
+
+    /// Divides a Color with a float number
+    fn div(self, rhs: f64) -> Self::Output {
+        self * (1.0 / rhs)
+    }
+}
+impl ops::Mul<&Color> for &Color {
+    type Output = Color;
+
+    /// Schur-product of two colors
+    fn mul(self, rhs: &Color) -> Self::Output {
         utils::color(self.r * rhs.r, self.g * rhs.g, self.b * rhs.b)
     }
 }
@@ -274,6 +328,11 @@ impl Transformation {
     /// Returns a non-mutable reference to the matrix of the Transformation object
     pub fn matrix(&self) -> &Matrix {
         return &self.matrix;
+    }
+
+    /// Returns Rc<Matrix>
+    pub fn matrix_rc(&self) -> Rc<Matrix> {
+        return Rc::new(self.matrix);
     }
 
     /// Returns an inverse matrix (ownership)

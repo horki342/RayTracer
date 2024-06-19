@@ -268,7 +268,7 @@ impl World {
         );
     }
 
-    /// Calculate color in the World when the Ray is traveling
+    /// Calculate color in the World when the Ray is travelling
     pub fn calc(&self, r: &Ray, bg: &Color) -> Color {
         // todo!("Hit returns &I, so for performance purposes it can take the ownership, so that clone is not necessary.")
         let xs = self.intersect(&r);
@@ -307,7 +307,7 @@ impl Default for World {
         world
     }
 }
-
+ 
 /// Implements Canvas where objects are drawn. Canvas can be converted to PPM format to be visualized.
 pub struct Canvas {
     pub width: usize,

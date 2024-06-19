@@ -17,43 +17,28 @@ use crate::{
 /// specular: Specular lighting coefficient
 /// shininess: Represents the shininess of the Light's reflection on the surface
 /// color: Reflected Spectrum of light form object's surface (aka Color)
-#[derive(Debug, Clone, PartialEq)]
-pub struct Material {
+#[derive(Clone, PartialEq, Debug)]
+pub struct Material<'a> {
     pub color: Color,
     pub ambient: f64,
     pub diffuse: f64,
     pub specular: f64,
     pub shininess: f64, 
-    pattern: Pattern,
+    pub pattern: &'a dyn PatternInterface 
 }
 
-impl Material {
-    pub fn new(color: Color, ambient: f64, diffuse: f64, specular: f64, shininess: f64) -> Self {
-        Self {
-            color,
-            ambient, 
-            diffuse,
-            specular, 
-            shininess,
-            pattern: Pattern::None,
-        }
-    }
-
+impl<'a> Material<'a> {
     /// Change the color of the Material
     pub fn change_color(&mut self, col: Color) {
         self.color = col;
     }
-    
-    pub fn change_pattern(&mut self, pattern: Pattern) {
-        self.pattern = pattern;
-    }
 
-    pub fn get_pattern(&mut self) -> &mut Pattern {
-        return &mut self.pattern;
+    pub fn pattern(&self) -> &impl PatternInterface {
+        self.pattern
     }
 }
 
-impl Default for Material {
+impl<'a> Default for Material<'a> {
     fn default() -> Self {
         Self {
             color: utils::color(1.0, 1.0, 1.0),
@@ -61,7 +46,7 @@ impl Default for Material {
             diffuse: 0.9,
             specular: 0.9,
             shininess: 200.0,
-            pattern: Pattern::None
+            pattern: &StripePattern::default(),
         }
     }
 }
@@ -81,7 +66,7 @@ impl Ray {
     pub fn new(origin: Vector, direction: Vector) -> Self {
         Self {
             origin,
-            direction,
+            direction: direction,
         }
     }
 
@@ -153,7 +138,7 @@ impl Computations {
 /// t: t-value of Intersection
 /// obj: reference to the Drawable Shape
 #[derive(Debug, Clone)]
-pub struct I { 
+pub struct I {
     pub t: f64,
     pub obj: RAIIDrawable,
 }
@@ -181,7 +166,7 @@ pub type Tvalues = Vec<f64>;
 /// Convenient way to create Tvalues from multiple elements (like vec![...])
 macro_rules! tvalues {
     () => {
-        vec![] 
+        vec![]
     };
 
     ($($el:expr),*) => {{
@@ -189,7 +174,7 @@ macro_rules! tvalues {
         $(
             res.push($el);
         )*
-        res as Tvalues
+        res
     }};
 }
 
@@ -281,18 +266,6 @@ pub trait Drawable: Debug {
     /// m: owned Material object
     fn set_material(&mut self, m: Material) {
         self.get_shape_mut().set_material(m);
-    }
-    
-    /// Set and reference Shape's transformation
-    fn set_pattern(&mut self, mut p: Pattern) {
-        let shape_transformation = self.get_shape().get_transform().matrix_rc();
-        p.set_shape_transform(shape_transformation);  
-        self.get_material_mut().change_pattern(p);
-    }
-    
-    /// Get mutable ref to Pattern of the object 
-    fn get_pattern(&mut self) -> &mut Pattern {
-        self.get_material_mut().get_pattern()
     }
 
     /// Returns a reference to the Transformation object of the Drawable object (Shape)
@@ -456,15 +429,8 @@ impl PointLight {
     /// n - Normal to the object at the world pixel;
     /// shadowed - Switch whether the point is shadowed
     pub fn shade(&self, m: &Material, p: &Vector, e: &Vector, n: &Vector, shadowed: bool) -> Color {
-        // combine the surface color or pattern with the light's intensity
-        let eff_col: Color = match &m.pattern {  
-           Pattern::None => self.int * m.color,
-            _ => {
-                // println!("pattern option");
-                self.int * m.pattern.get(p).expect("Pattern is None")
-            },
-        };  
-
+        // combine the surface color with the light's intensity
+        let eff_col = self.int * m.color; // effective color
 
         // find the direction to the light source
         let l = (self.pos - p).normalize();
@@ -496,7 +462,7 @@ impl PointLight {
 
             // rde represents the cosine of the angle between the
             // reflection vector and the eye vector. A negative number means the
-            // light reflects away from the eye
+            // light reflects away from the eye.
             let rde = utils::dot(&r, e); // reflect_dot_eye
             if rde <= 0.0 {
                 specular = Color::black();
@@ -517,131 +483,38 @@ impl PointLight {
     }
 }
 
-// transformation set for pattern 
-type PatternTransform = (Transformation, Rc<Matrix>);
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Pattern {
-    StripePattern(Color, Color, PatternTransform),
-    TestPattern(PatternTransform),
-    GradientPattern(Color, Color, PatternTransform),
-    None
+/// Methods that each pattern must have.
+pub trait PatternInterface : Clone + PartialEq + Debug {
+    /// Returns a color of the Point in World Space
+    fn color_world(&self, p: &Vector) -> Color;    
 }
 
-pub enum PatternList {
-    StripePattern,
-    TestPattern,
-    GradientPattern,
+// different patterns
+#[derive(Clone, PartialEq, Debug)]
+pub struct StripePattern {
+    // color 1 
+    pub c1: Color,
+    // color 2 
+    pub c2: Color
 }
 
-impl Pattern {
-    /// Set colors for StripePattern and GradientPattern
-    pub fn set_colors(&mut self, c1: Color, c2: Color) {
-        match self {
-            Pattern::StripePattern(ca, cb, _) => {
-                *ca = c1;
-                *cb = c2;
-            },
-            Pattern::GradientPattern(ca, cb, _) => {
-                *ca = c1;
-                *cb = c2;
-            },
-            _ => panic!("Could not set colors to the Pattern: only Stripe and GradientPattern supported"),
+impl Default for StripePattern {
+    fn default() -> Self {
+        Self {
+            c1: Color::white(),
+            c2: Color::black()
         }
     }
+}
 
-    pub fn get(&self, p_wld: &Vector) -> Option<Color> {
-        match self {
-            Pattern::StripePattern(c1, c2, tset) => Some(Pattern::stripepattern_get(p_wld, &c1, &c2, &tset)),
-            Pattern::None => None,
-            Pattern::TestPattern(tset) => Some(Pattern::testpattern_get(p_wld, &tset)),
-            Pattern::GradientPattern(c1, c2, tset) => Some(Pattern::gradientpattern_get(p_wld, &c1, &c2, &tset)),
-        }
-    }
-   
-    pub fn set_pattern_transform(&mut self, t: Transformation) {
-        match self {
-            Pattern::StripePattern(.., tset) => tset.0 = t,
-            Pattern::TestPattern(tset) => tset.0 = t,
-            Pattern::GradientPattern(.., tset) => tset.0 = t,
-            Pattern::None => panic!(""),
-        }
-    }
-
-    pub fn add_tunit(&mut self, t: TUnit) {
-        match self {
-            Pattern::StripePattern(.., tset) => tset.0.add(t),
-            Pattern::TestPattern(tset) => tset.0.add(t), 
-            Pattern::GradientPattern(.., tset) => tset.0.add(t),
-            Pattern::None => panic!("Cannot add TUnit to Pattern::None"),
-        }
-    }
-
-    pub fn set_shape_transform(&mut self, shape_t: Rc<Matrix>) {
-        match self {
-            Pattern::StripePattern(.., tset) => tset.1 = shape_t,
-            Pattern::TestPattern(tset) => tset.1 = shape_t,
-            Pattern::GradientPattern(.., tset) => tset.1 = shape_t,
-            Pattern::None => panic!("Could not set shape transformation to Pattern::None"),
-        }
-    }
-
-    pub fn default(opt: PatternList) -> Self {
-        match opt {
-            PatternList::StripePattern => {
-                return Pattern::StripePattern(
-                    Color::white(),
-                    Color::black(),
-                    (Transformation::default(), Rc::new(Matrix::identity())) as PatternTransform,
-                );
-            },
-            PatternList::TestPattern => {
-                return Pattern::TestPattern(
-                    (Transformation::default(), Rc::new(Matrix::identity())) as PatternTransform,
-                );
-            },
-            PatternList::GradientPattern => {
-                return Pattern::GradientPattern(
-                    Color::white(),
-                    Color::black(),
-                    (Transformation::default(), Rc::new(Matrix::identity())) as PatternTransform,
-                );
-            }
-        }
-    }
-
-    /// apply PatternTransform on a point
-    fn transform(p_wld: &Vector, tset: &PatternTransform) -> Vector {
-        let t_inv = tset.0.matrix().try_inverse().expect("Could not inverse matrix");
-        let shape_t_inv = tset.1.try_inverse().expect("Could not inverse matrix");
-    
-        let p_obj = t_inv * (shape_t_inv * p_wld);
-        
-        p_obj
-    }
-   
-    fn gradientpattern_get(p_wld: &Vector, c1: &Color, c2: &Color, tset: &PatternTransform) -> Color {
-        let p_obj = Pattern::transform(p_wld, tset);
-        let dc = (c2 - c1) * (p_obj.x - p_obj.x.floor());
-
-        return c1 + &dc;
-    }
-
-    fn testpattern_get(p_wld: &Vector, tset: &PatternTransform) -> Color {
-        let p_obj = Pattern::transform(p_wld, tset);
-
-        return utils::color(p_obj.x, p_obj.y, p_obj.z);
-    }
-        
-    fn stripepattern_get(p_wld: &Vector, c1: &Color, c2: &Color, tset: &PatternTransform) -> Color {
-        let p_obj = Pattern::transform(p_wld, tset);
-
-        let temp = p_obj.x.floor() % 2.0;
+impl PatternInterface for StripePattern {
+    fn color_world(&self, p: &Vector) -> Color {
+        let temp = p.x.floor() % 2.0;
         if temp == 0.0 {
-            return c1.clone();
+            return self.c1;
         }
         else {
-            return c2.clone();
+            return self.c2;
         }
     }
 }

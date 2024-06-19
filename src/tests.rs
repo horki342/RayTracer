@@ -4,9 +4,9 @@ use super::math::utils::*;
 use super::math::{Color, Matrix, TUnit, Transformation};
 
 use super::render::Canvas;
-use crate::render::core::{Computations, Drawable, Is, Material, PointLight, Ray, II};
-use crate::render::core::{I, II as _};
-use crate::render::shapes::{Plane, Point, Sphere};
+use crate::render::core::{Computations, Drawable, Is, Material, Pattern, PatternList, PointLight, Ray, II};
+use crate::render::core::I;
+use crate::render::shapes::{Plane, Sphere};
 
 use crate::render::{Camera, World};
 use crate::{fassert, massert, transform, vassert};
@@ -731,4 +731,64 @@ fn check_planes() {
     let i = p.local_intersect(&r);
     assert_eq!(i.len(), 1);
     assert!(i.contains(&1.0));
+}
+
+#[test]
+fn check_patterns() {
+    // A stripe pattern is constant in y and z, and alternates in x 
+    let pattern = Pattern::default(PatternList::StripePattern);
+    assert_eq!(pattern.get(&point(0.0, 0.0, 0.0)).unwrap(), Color::white());
+    assert_eq!(pattern.get(&point(0.0, 1.0, 0.0)).unwrap(), Color::white());
+    assert_eq!(pattern.get(&point(0.0, 2.0, 0.0)).unwrap(), Color::white());
+    assert_eq!(pattern.get(&point(0.0, 0.0, 1.0)).unwrap(), Color::white());
+    assert_eq!(pattern.get(&point(0.0, 0.0, 2.0)).unwrap(), Color::white());
+    assert_eq!(pattern.get(&point(0.0, 0.0, 0.0)).unwrap(), Color::white());
+    assert_eq!(pattern.get(&point(0.9, 0.0, 0.0)).unwrap(), Color::white());
+    assert_eq!(pattern.get(&point(1.0, 0.0, 0.0)).unwrap(), Color::black());
+    assert_eq!(pattern.get(&point(-0.1, 0.0, 0.0)).unwrap(), Color::black());
+    assert_eq!(pattern.get(&point(-1.0, 0.0, 0.0)).unwrap(), Color::black());
+    assert_eq!(pattern.get(&point(-1.1, 0.0, 0.0)).unwrap(), Color::white());
+
+    let mut m = Material::new(Color::default(), 1.0, 0.0, 0.0, 0.0);
+    m.change_pattern(pattern);
+        
+    let eyev = vector(0.0, 0.0, -1.0);
+    let normalv = vector(0.0, 0.0, -1.0);
+    let light = PointLight::new(point(0.0, 0.0, -10.0), color(1.0, 1.0, 1.0));
+    let c1 = light.shade(&m, &point(0.9, 0.0, 0.0), &eyev, &normalv, false);
+    let c2 = light.shade(&m, &point(1.1, 0.0, 0.0), &eyev, &normalv, false);
+    assert_eq!(c1, color(1.0, 1.0, 1.0));
+    assert_eq!(c2, color(0.0, 0.0, 0.0));
+
+    // a pattern with an object transformation 
+    let mut shape = Sphere::default();
+    shape.set_tunit(TUnit::Scale(2.0, 2.0, 2.0));
+    let pattern = Pattern::default(PatternList::TestPattern);
+    shape.set_pattern(pattern);
+    let c = shape.get_pattern().get(&point(2.0, 3.0, 4.0)).unwrap();
+    assert_eq!(c, color(1.0, 1.5, 2.0));
+
+    // a pattern with a pattern transformation
+    let mut shape = Sphere::default();
+    let mut pattern = Pattern::default(PatternList::TestPattern);
+    pattern.add_tunit(TUnit::Scale(2.0, 2.0, 2.0));
+    shape.set_pattern(pattern);
+    let c = shape.get_pattern().get(&point(2.0, 3.0, 4.0)).unwrap();
+    assert_eq!(c, color(1.0, 1.5, 2.0));
+
+    // a pattern with both an object and a pattern transformation
+    let mut shape = Sphere::default();
+    let mut pattern = Pattern::default(PatternList::TestPattern);
+    shape.set_tunit(TUnit::Scale(2.0, 2.0, 2.0));
+    pattern.add_tunit(TUnit::Translate(0.5, 1.0, 1.5));
+    shape.set_pattern(pattern);
+    let c = shape.get_pattern().get(&point(2.5, 3.0, 3.5)).unwrap();
+    assert_eq!(c, color(0.75, 0.5, 0.25));
+    
+    // a gradient linearly interpolates between colors 
+    let pattern = Pattern::default(PatternList::GradientPattern);
+    assert_eq!(pattern.get(&point(0.0, 0.0, 0.0)).unwrap(), color(1.0, 1.0, 1.0));
+    assert_eq!(pattern.get(&point(0.25, 0.0, 0.0)).unwrap(), color(0.75, 0.75, 0.75));
+    assert_eq!(pattern.get(&point(0.5, 0.0, 0.0)).unwrap(), color(0.5, 0.5, 0.5));
+    assert_eq!(pattern.get(&point(0.75, 0.0, 0.0)).unwrap(), color(0.25, 0.25, 0.25));
 }
