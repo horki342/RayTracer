@@ -310,8 +310,8 @@ pub fn draw_patterns() {
     let light = PointLight::new(point(-10.0, 10.0, -10.0), color(1.0, 1.0, 1.0));
 
     let mut app = Renderer::new(
-        300,
-        150,
+        3000,
+        1500,
         PI / 3.0,
         point(0.0, 1.5, -5.0),
         point(0.0, 1.0, 0.0),
